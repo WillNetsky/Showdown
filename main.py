@@ -1,104 +1,60 @@
 # main.py
-# The main script to load players, create teams, and run the game simulation.
+# Entry point for the baseball simulation.
 
 import os
-import glob # Import glob to find CSV files
-
-# Import classes and functions from the other modules
-from entities import Batter, Pitcher # Import Batter and Pitcher if needed elsewhere in main
-from team import Team
-from game_logic import play_game, load_players_from_csv, create_random_team # Import specific functions
-from constants import MIN_TEAM_POINTS, MAX_TEAM_POINTS # Import necessary constants
-
-
-def find_csv_files(directory="."):
-    """
-    Finds all CSV files in the specified directory.
-
-    Args:
-        directory (str): The directory to search in. Defaults to the current directory.
-
-    Returns:
-        list: A list of paths to CSV files found.
-    """
-    # Use glob to find all files ending with .csv in the directory
-    csv_files = glob.glob(os.path.join(directory, "*.csv"))
-    return csv_files
+import glob
+from team_management import load_players_from_csv, create_random_team
+from game_logic import play_game
+from constants import MIN_TEAM_POINTS, MAX_TEAM_POINTS
 
 def main():
     """
-    Main function to run the baseball simulation.
+    Main function to load players, create teams, and simulate a game.
     """
-    print("Starting Baseball Game Simulation...")
-
-    # Find available CSV files in the current directory
-    available_csv_files = find_csv_files()
-
-    if not available_csv_files:
-        print("Error: No CSV files found in the current directory.")
-        return
-
-    print("Available CSV files:")
-    for i, file in enumerate(available_csv_files):
-        print(f"{i + 1}: {file}")
-
-    # Load all players from all found CSVs
+    print("Loading player data...")
+    # Load batters and pitchers from their respective CSV files
     all_players = []
-    for csv_file in available_csv_files:
-        print(f"\nLoading player data from: {csv_file}")
-        loaded_players = load_players_from_csv(csv_file)
-        if loaded_players:
-            all_players.extend(loaded_players)
-        else:
-            print(f"Warning: Could not load players from {csv_file}. Skipping.")
+    batter_files = glob.glob('all_batters.csv') # Use glob to find the file
+    pitcher_files = glob.glob('all_pitchers.csv') # Use glob to find the file
+
+    if not batter_files:
+        print("Error: 'all_batters.csv' not found.")
+        return # Exit if batter file is not found
+    if not pitcher_files:
+        print("Error: 'all_pitchers.csv' not found.")
+        return # Exit if pitcher file is not found
 
 
-    if not all_players:
-        print("Failed to load any player data from available CSVs. Exiting.")
-        return
+    # Assuming only one file each for batters and pitchers based on previous usage
+    batters_list = load_players_from_csv(batter_files[0])
+    pitchers_list = load_players_from_csv(pitcher_files[0])
 
-    print(f"\nSuccessfully loaded a total of {len(all_players)} players from all CSVs.")
+    if batters_list is None or pitchers_list is None:
+        print("Failed to load player data. Exiting.")
+        return # Exit if loading failed
 
-    # Create two random teams
-    team1 = create_random_team(all_players, "Random_Team_1", MIN_TEAM_POINTS, MAX_TEAM_POINTS)
-    team2 = create_random_team(all_players, "Random_Team_2", MIN_TEAM_POINTS, MAX_TEAM_POINTS)
+    all_players.extend(batters_list)
+    all_players.extend(pitchers_list)
 
-    if team1 is None or team2 is None:
-        print("Failed to create valid teams within the specified point range. Exiting.")
-        return
+    print("Creating teams...")
+    # Create two random teams within the specified point range
+    team1 = create_random_team(all_players, "Home Team", MIN_TEAM_POINTS, MAX_TEAM_POINTS)
+    team2 = create_random_team(all_players, "Away Team", MIN_TEAM_POINTS, MAX_TEAM_POINTS)
 
-    print(f"\nTeam 1: {team1.name} ({team1.total_points} points)")
-    print(f"Team 2: {team2.name} ({team2.total_points} points)")
+    if team1 and team2:
+        print("\nTeams created successfully. Simulating game...")
+        # Simulate a game between the two teams
+        final_score1, final_score2, game_log = play_game(team1, team2)
 
-    # Run the game simulation
-    final_score1, final_score2, game_log = play_game(team1, team2)
+        print("\n--- Game Log ---")
+        for entry in game_log:
+            print(entry)
 
-    # Print the game log
-    print("\n--- Game Log ---")
-    for entry in game_log:
-        print(entry)
-
-    # Print the final score
-    print("\n--- Final Score ---")
-    print(f"{team1.name}: {final_score1}")
-    print(f"{team2.name}: {final_score2}")
-
-    # Print player stats (optional)
-    print("\n--- Player Stats ---")
-    print(f"\n{team1.name} Batting Stats:")
-    for batter in team1.batters:
-        print(batter)
-    print(f"\n{team1.name} Pitching Stats:")
-    for pitcher in team1.all_pitchers:
-        print(pitcher)
-
-    print(f"\n{team2.name} Batting Stats:")
-    for batter in team2.batters:
-        print(batter)
-    print(f"\n{team2.name} Pitching Stats:")
-    for pitcher in team2.all_pitchers:
-        print(pitcher)
-
+        print(f"\n--- Final Score ---")
+        print(f"{team1.name}: {final_score1}")
+        print(f"{team2.name}: {final_score2}")
+    else:
+        print("Failed to create one or both teams. Exiting.")
 
 if __name__ == "__main__":
     main()

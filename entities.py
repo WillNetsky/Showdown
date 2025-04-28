@@ -1,10 +1,8 @@
 # entities.py
-# Contains the core data structures for players (Batter and Pitcher).
-
-# No local constants needed here, they will be imported if necessary
+# Contains the classes for game entities like Batter and Pitcher.
 
 class Batter:
-    def __init__(self, name, position, onbase, so, gb, fb, bb ,b1, b1p, b2, b3, hr, pts):
+    def __init__(self, name, position, onbase, so, gb, fb, bb ,b1, b1p, b2, b3, hr, pts, year=None, set=None):
         """
         Initializes a batter with their attributes.
 
@@ -22,10 +20,12 @@ class Batter:
             b3 (int): Triple range end.
             hr (int): Home run range end.
             pts (int): The player's points value from the CSV.
+            year (str, optional): The year of the player's card. Defaults to None.
+            set (str, optional): The set of the player's card. Defaults to None.
         """
         self.name = name
         self.position = position # Store the raw position string from CSV
-        self.on_base = onbase
+        self.on_base = onbase # Corrected attribute name
         self.so = so
         self.gb = gb
         self.fb = fb
@@ -35,11 +35,15 @@ class Batter:
         self.b2 = b2
         self.b3 = b3
         self.pts = pts # Added points attribute
-        # Cap HR at 20 based on original comment logic
+        self.year = year # Added year attribute
+        self.set = set # Added set attribute
+
+        # Cap HR at 0 if the original value is > 20, as strategy cards are not implemented
         if hr > 20:
             self.hr = 0
         else:
             self.hr = hr
+
         # Calculate the 'Out' range end based on SO, GB, FB
         self.out = so + gb + fb
 
@@ -67,11 +71,10 @@ class Batter:
         Returns:
             bool: True if the batter can play the position, False otherwise.
         """
-        # Import POSITION_MAPPING locally to avoid circular dependency if entities imports constants
-        from constants import POSITION_MAPPING
+        # Split the player's listed position(s) from the CSV by '/'
+        csv_positions = [pos.strip() for pos in self.position.split('/') if pos.strip()] # Split and remove empty strings
 
-        csv_positions = self.position.split('/')
-        # Special rule for DH: if 'DH' is on the card, they can ONLY be a DH.
+        # Special rule for DH: if 'DH' is listed on the card, they can ONLY be a DH.
         if 'DH' in csv_positions:
             return required_position == 'DH'
 
@@ -83,21 +86,39 @@ class Batter:
              return True # For the purpose of this function, any non-DH-only player can be a DH
 
         # For other positions, check the mapping
+        # Use the POSITION_MAPPING from constants.py
+        from constants import POSITION_MAPPING # Import here to avoid circular dependency
+
         for csv_pos in csv_positions:
+            # Get the list of positions this CSV position maps to
             mapped_positions = POSITION_MAPPING.get(csv_pos, [])
             if required_position in mapped_positions:
                 return True
+
         return False
 
 
     def __str__(self):
         """
-        Returns a string representation of the Batter object with stats.
+        Returns a string representation of the Batter object with basic info and stats.
         """
-        # Display attributes and current stats, including points and RBI
-        return (f"{self.name} ({self.position}): OB {self.on_base}, Out {self.out}, Pts {self.pts}, "
-                f"Stats: PA {self.plate_appearances}, AB {self.at_bats}, R {self.runs_scored}, RBI {self.rbi}, "
-                f"H ({self.singles}/{self.doubles}/{self.triples}/{self.home_runs}), BB {self.walks}, SO {self.strikeouts}")
+        # Display basic info (Name - YearSet (Pos, Pts)) and current stats
+        display_name = self.name
+        if self.year and self.set:
+            display_name = f"{self.name} - {self.year}{self.set}"
+        elif self.year:
+             display_name = f"{self.name} - {self.year}"
+        elif self.set:
+             display_name = f"{self.name} - {self.set}"
+
+        # Concise stats display
+        stats_display = (f"PA: {self.plate_appearances}, AB: {self.at_bats}, R: {self.runs_scored}, "
+                         f"H: {self.singles + self.doubles + self.triples + self.home_runs}, " # Total Hits
+                         f"1B: {self.singles}, 2B: {self.doubles}, 3B: {self.triples}, HR: {self.home_runs}, "
+                         f"BB: {self.walks}, RBI: {self.rbi}, Outs: {self.outs}")
+
+        return f"{display_name} ({self.position}, {self.pts} pts) | {stats_display}"
+
 
     def __repr__(self):
         """
@@ -105,10 +126,11 @@ class Batter:
         """
         return (f"Batter(name='{self.name}', position='{self.position}', onbase={self.on_base}, "
                 f"so={self.so}, gb={self.gb}, fb={self.fb}, bb={self.bb}, b1={self.b1}, "
-                f"b1p={self.b1p}, b2={self.b2}, b3={self.b3}, hr={self.hr}, pts={self.pts})")
+                f"b1p={self.b1p}, b2={self.b2}, b3={self.b3}, hr={self.hr}, pts={self.pts}, year='{self.year}', set='{self.set}')")
+
 
 class Pitcher:
-    def __init__(self, name, position, control, pu, so, gb, fb, bb, b1, b2, hr, pts, ip_limit=None):
+    def __init__(self, name, position, control, pu, so, gb, fb, bb, b1, b2, hr, pts, ip_limit=None, year=None, set=None):
         """
         Initializes a pitcher with their attributes.
 
@@ -126,6 +148,8 @@ class Pitcher:
             hr (int): Home run range end.
             pts (int): The player's points value from the CSV.
             ip_limit (float, optional): The innings pitched limit for this pitcher (can be fractional). Defaults to None.
+            year (str, optional): The year of the player's card. Defaults to None.
+            set (str, optional): The set of the player's card. Defaults to None.
         """
         self.name = name
         self.position = position # Now can be "P", "SP", "RP", "CL"
@@ -137,14 +161,12 @@ class Pitcher:
         self.bb = bb
         self.b1 = b1
         self.b2 = b2
-        self.hr = hr
+        self.hr = hr # Pitchers can also have HR allowed ranges
         self.pts = pts # Added points attribute
         self.ip_limit = ip_limit # Added IP limit attribute
-        # Cap HR at 20 based on original comment logic
-        if hr > 20:
-            self.hr = 0
-        else:
-            self.hr = hr
+        self.year = year # Added year attribute
+        self.set = set # Added set attribute
+
         # Calculate the 'Out' range end based on PU, SO, GB, FB
         self.out = pu + so + gb + fb
 
@@ -161,13 +183,27 @@ class Pitcher:
 
     def __str__(self):
         """
-        Returns a string representation of the Pitcher object with stats.
+        Returns a string representation of the Pitcher object with basic info and stats.
         """
-        # Display attributes and current stats, including points and IP
-        return (f"{self.name} ({self.position}): Control {self.control}, Out {self.out}, Pts {self.pts}, "
-                f"IP Limit: {self.ip_limit if self.ip_limit is not None else 'N/A'}, "
-                f"Stats: BF {self.batters_faced}, IP {self.innings_pitched:.1f}, R {self.runs_allowed}, ER {self.earned_runs_allowed}, "
-                f"H {self.hits_allowed}, BB {self.walks_allowed}, SO {self.strikeouts_thrown}")
+        # Display basic info (Name - YearSet (Pos, Pts, IP Limit)) and current stats
+        display_name = self.name
+        if self.year and self.set:
+            display_name = f"{self.name} - {self.year}{self.set}"
+        elif self.year:
+             display_name = f"{self.name} - {self.year}"
+        elif self.set:
+             display_name = f"{self.name} - {self.set}"
+
+        ip_limit_display = f"IP Limit: {self.ip_limit:.1f}" if self.ip_limit is not None else "IP Limit: N/A"
+
+
+        # Concise stats display
+        stats_display = (f"IP: {self.innings_pitched:.1f}, BF: {self.batters_faced}, "
+                         f"H: {self.hits_allowed}, R: {self.runs_allowed}, ER: {self.earned_runs_allowed}, "
+                         f"BB: {self.walks_allowed}, SO: {self.strikeouts_thrown}")
+
+        return f"{display_name} ({self.position}, {self.pts} pts) | {ip_limit_display}, Stats: {stats_display}"
+
 
     def __repr__(self):
         """
@@ -175,4 +211,4 @@ class Pitcher:
         """
         return (f"Pitcher(name='{self.name}', position='{self.position}', control={self.control}, "
                 f"pu={self.pu}, so={self.so}, gb={self.gb}, fb={self.fb}, bb={self.bb}, "
-                f"b1={self.b1}, b2={self.b2}, b3={self.b3}, hr={self.hr}, pts={self.pts}, ip_limit={self.ip_limit})")
+                f"b1={self.b1}, b2={self.b2}, b3={self.b3}, hr={self.hr}, pts={self.pts}, ip_limit={self.ip_limit}, year='{self.year}', set='{self.set}')")

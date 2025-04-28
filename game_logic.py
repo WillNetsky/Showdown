@@ -2,14 +2,14 @@
 # Contains the functions for simulating gameplay.
 
 import random
-import csv # Import the csv module
-import os # Import os for file path joining in load_players_from_csv
-import glob # Import glob for finding files in create_random_team
+# Removed csv, os, glob imports as they are no longer needed in this file
+# Removed load_players_from_csv and create_random_team as they have been moved
 
 # Import necessary classes and constants from other modules
+# Removed pitcher_hit_results and batter_hit_results from import as they are not used
 from entities import Batter, Pitcher
-from team import Team
-from constants import pitcher_hit_results, batter_hit_results, POSITION_MAPPING, STARTING_POSITIONS, MIN_TEAM_POINTS, MAX_TEAM_POINTS
+from team import Team # Team class is still needed here for type hinting and object creation
+from constants import POSITION_MAPPING, STARTING_POSITIONS, MIN_TEAM_POINTS, MAX_TEAM_POINTS
 
 def roll_dice(num_dice, sides):
     """
@@ -43,45 +43,58 @@ def get_chart_result(roll, player, pitcher, good_pitch):
     if good_pitch:
         # Use pitcher's chart
         # Determine the outcome based on the roll and pitcher's ranges
+        # Ensure pitcher.out is calculated correctly in Pitcher class
         if roll <= pitcher.out:
             return "Out"
         else:
-            # Calculate the cumulative ranges for hits
-            pitcher_ranges = {
-                'BB': pitcher.bb,
-                '1B': pitcher.b1,
-                '2B': pitcher.b2,
-                'HR': pitcher.hr
-            }
+            # Calculate the cumulative ranges for hits and walks based on pitcher stats
+            # Note: pitcher.out is the end of the Out range
             cumulative_range = pitcher.out
-            for result, value in pitcher_ranges.items():
-                cumulative_range += value
-                if roll <= cumulative_range:
-                    return result
-            # Should not reach here if ranges cover 1-20
-            return "Unknown Pitcher Result"
+            if roll <= cumulative_range + pitcher.bb:
+                return "BB"
+            cumulative_range += pitcher.bb
+            if roll <= cumulative_range + pitcher.b1:
+                return "1B"
+            cumulative_range += pitcher.b1
+            if roll <= cumulative_range + pitcher.b2:
+                return "2B"
+            cumulative_range += pitcher.b2
+            if roll <= cumulative_range + pitcher.hr:
+                return "HR"
+
+            # If the roll is higher than the cumulative range for defined results, it's an Out
+            return "Out" # Default to Out if roll doesn't match any defined range
+
     else:
         # Use batter's chart
         # Determine the outcome based on the roll and batter's ranges
+        # Ensure player.out is calculated correctly in Batter class
         if roll <= player.out:
             return "Out"
         else:
-            # Calculate the cumulative ranges for hits
-            batter_ranges = {
-                'BB': player.bb,
-                '1B': player.b1,
-                '1BP': player.b1p,
-                '2B': player.b2,
-                '3B': player.b3,
-                'HR': player.hr
-            }
+            # Calculate the cumulative ranges for hits and walks based on batter stats
+            # Note: player.out is the end of the Out range
             cumulative_range = player.out
-            for result, value in batter_ranges.items():
-                cumulative_range += value
-                if roll <= cumulative_range:
-                    return result
-            # Should not reach here if ranges cover 1-20
-            return "Unknown Batter Result"
+            if roll <= cumulative_range + player.bb:
+                return "BB"
+            cumulative_range += player.bb
+            if roll <= cumulative_range + player.b1:
+                return "1B"
+            cumulative_range += player.b1
+            if roll <= cumulative_range + player.b1p:
+                return "1BP"
+            cumulative_range += player.b1p
+            if roll <= cumulative_range + player.b2:
+                return "2B"
+            cumulative_range += player.b2
+            if roll <= cumulative_range + player.b3:
+                return "3B"
+            cumulative_range += player.b3
+            if roll <= cumulative_range + player.hr:
+                return "HR"
+
+            # If the roll is higher than the cumulative range for defined results, it's an Out
+            return "Out" # Default to Out if roll doesn't match any defined range
 
 
 def handle_base_hit(runners, result, current_batter):
@@ -280,15 +293,28 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
     # Create a readable string for the runners on base
     runner_names = []
     if runners[0] is not None:
-        runner_names.append(f"1B: {runners[0].name}")
+        # Use the __str__ method for the runner's name to include year/set
+        runner_names.append(f"1B: {runners[0].__str__().split(' |')[0]}") # Get info before the stats pipe
     if runners[1] is not None:
-        runner_names.append(f"2B: {runners[1].name}")
+        # Use the __str__ method for the runner's name to include year/set
+        runner_names.append(f"2B: {runners[1].__str__().split(' |')[0]}") # Get info before the stats pipe
     if runners[2] is not None:
-        runner_names.append(f"3B: {runners[2].name}")
+        # Use the __str__ method for the runner's name to include year/set
+        runner_names.append(f"3B: {runners[2].__str__().split(' |')[0]}") # Get info before the stats pipe
     runners_display = ", ".join(runner_names) if runner_names else "Bases Empty"
 
+    # --- Construct the concise log entry ---
+    # Get concise batter info (Name - YearSet (Pos, Pts))
+    # Use the __str__ method and split to get the concise info
+    concise_batter_info = batter.__str__().split(' |')[0]
+
+    # Get concise pitcher info (Name - YearSet (Pos, Pts))
+    # Use the __str__ method and split to get the concise info
+    concise_pitcher_info = pitcher.__str__().split(' |')[0]
+
+
     # Include roll values and pitch quality in the log entry
-    inning_log.append(f"{batter.name} vs. {pitcher.name} ({runners_display}) [Pitch Roll: {pitch_result} ({pitch_quality_text}), Swing Roll: {swing_roll}]: {result}")
+    inning_log.append(f"{concise_batter_info} vs. {concise_pitcher_info} ({runners_display}) [Pitch Roll: {pitch_result} ({pitch_quality_text}), Swing Roll: {swing_roll}]: {result}")
 
     # Update stats and runners based on the result
     if result == "Out":
@@ -312,10 +338,26 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
             batter.triples += 1
         elif result == "HR":
             batter.home_runs += 1
-            pitcher.runs_allowed += (sum(1 for r in runners if r is not None) + 1) # Count runners on base + batter
-            pitcher.earned_runs_allowed += (sum(1 for r in runners if r is not None) + 1) # Assuming all runs are earned for simplicity
-        runs_scored_on_play, new_runners = handle_base_hit(runners, result, batter)
-        runs_scored += runs_scored_on_play # Add runs from base advancement
+            # Calculate runs scored on the HR based on who was on base + the batter
+            runs_scored_on_hr = sum(1 for r in runners if r is not None) + 1
+            pitcher.runs_allowed += runs_scored_on_hr
+            pitcher.earned_runs_allowed += runs_scored_on_hr # Assuming all runs are earned for simplicity
+            # Update runs_scored for the batter and runners who scored
+            if isinstance(batter, Batter):
+                batter.runs_scored += 1
+            for runner in runners:
+                if isinstance(runner, Batter):
+                    runner.runs_scored += 1
+            runs_scored += runs_scored_on_hr
+            new_runners = [None, None, None] # Bases clear on a HR
+
+        # Note: handle_base_hit is called for all hits (including HR in previous versions),
+        # but for 1B, 1BP, 2B, 3B, we still need to call handle_base_hit to move runners.
+        # HR is handled separately above for scoring and clearing bases.
+        if result in ["1B", "1BP", "2B", "3B"]:
+             runs_scored_on_play, new_runners = handle_base_hit(runners, result, batter)
+             runs_scored += runs_scored_on_play # Add runs from base advancement
+
 
     else:
         # Handle unexpected results as outs for now
@@ -328,8 +370,8 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
     # Update RBI for the batter who drove in runs
     if runs_scored > 0:
         batter.rbi += runs_scored
-        pitcher.runs_allowed += runs_scored
-        pitcher.earned_runs_allowed += runs_scored # Assuming all runs are earned for simplicity
+        # Note: Runs allowed and earned runs for the pitcher are handled in handle_base_hit
+        # and the HR block. Avoid double counting here.
 
 
     return result, runs_scored, new_runners
@@ -343,7 +385,7 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
         pitching_team (Team): The pitching team object.
         inning_number (int): The current inning number.
         game_log (list): A list to store the game log.
-        half_inning (str): "Top" or "Bottom"
+        half_inning (str): "Top" or "Bottom".
         game_state (dict): A dictionary containing the current state of the game (e.g., scores).
 
     Returns:
@@ -405,6 +447,21 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
         result, runs_this_play, runners = play_ball(current_batter, pitcher, inning_log, runners)
         runs_scored_this_inning += runs_this_play
 
+        # --- Check for Walk-Off ---
+        # If it's the bottom of the 9th or later, and the home team (batting_team) takes the lead
+        if half_inning == "Bottom" and inning_number >= 9:
+            # Calculate the potential score if the current runs scored are added
+            batting_team_potential_score = game_state[batting_team.name] + runs_scored_this_inning
+            pitching_team_current_score = game_state[pitching_team.name]
+
+            if batting_team_potential_score > pitching_team_current_score:
+                inning_log.append(f"Walk-Off {result}!")
+                # Update the game state with the runs scored *before* ending the inning
+                game_state[batting_team.name] += runs_scored_this_inning
+                runs_scored_this_inning = 0 # Reset runs for the inning as they've been added to game_state
+                break # End the inning immediately on a walk-off
+
+
         # Update pitcher IP *after* the play if it was an out
         if result == "Out":
             pitcher.innings_pitched += 1/3
@@ -418,8 +475,14 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
 
     inning_log.append(f"End of {half_inning} {inning_number}, {runs_scored_this_inning} run(s) scored.")
+    # Only add runs_scored_this_inning to game_state here if it wasn't a walk-off
+    # In a walk-off, runs were added to game_state within the walk-off check
+    if not (half_inning == "Bottom" and inning_number >= 9 and game_state[batting_team.name] > game_state[pitching_team.name]):
+         game_state[batting_team.name] += runs_scored_this_inning
+
+
     game_log.extend(inning_log) #add inning log to game log
-    return runs_scored_this_inning
+    return runs_scored_this_inning # Return the runs scored in this segment of the inning
 
 def handle_pitching_change(pitching_team: Team, batting_team: Team, inning_number, half_inning, game_state, inning_log):
     """
@@ -481,357 +544,66 @@ def play_game(team1: Team, team2: Team, num_innings=9):
 
     game_log.append(f"--- Game Start: {team1.name} vs. {team2.name} ---")
 
+    # Set the initial starting pitchers for each team
+    # This was previously handled in Team.__init__ but needs to be here
+    # to ensure pitchers are set before the first inning.
+    if team1.starters:
+        team1.current_pitcher = team1.starters[0]
+        team1.used_starters.append(team1.current_pitcher)
+    else:
+        game_log.append(f"Warning: {team1.name} has no starting pitchers.")
+        team1.current_pitcher = None # Ensure it's None if no SPs
+
+    if team2.starters:
+        team2.current_pitcher = team2.starters[0]
+        team2.used_starters.append(team2.current_pitcher)
+    else:
+         game_log.append(f"Warning: {team2.name} has no starting pitchers.")
+         team2.current_pitcher = None # Ensure it's None if no SPs
+
+
     for inning in range(1, num_innings + 1):
         # Top of the inning: Team 1 bats, Team 2 pitches
+        # Pass game_state to play_inning so it can update scores
         runs_team1 = play_inning(team1, team2, inning, game_log, "Top", game_state)
-        game_state[team1.name] += runs_team1
+        # Score is now updated within play_inning, no need to add here unless it wasn't a walk-off
+
+        # Check if the game ended early (e.g., mercy rule in future, though not implemented yet)
+        # Or if a walk-off happened in the top of an extra inning (which shouldn't happen, but as a safeguard)
+        # For now, the walk-off check is only in the bottom of the inning.
 
         # Bottom of the inning: Team 2 bats, Team 1 pitches
-        # Only play bottom of 9th or later if Team 2 is not already winning
+        # Only play bottom of 9th or later if Team 2 is not already winning OR it's not the 9th inning yet
+        # The walk-off logic in play_inning handles ending the game if Team 2 takes the lead in the bottom 9+
         if inning < num_innings or game_state[team2.name] <= game_state[team1.name]:
+             # Pass game_state to play_inning so it can update scores and check for walk-off
              runs_team2 = play_inning(team2, team1, inning, game_log, "Bottom", game_state)
-             game_state[team2.name] += runs_team2
+             # Score is now updated within play_inning, no need to add here unless it wasn't a walk-off
 
-        # Check for game over after bottom of the inning if 9 innings are complete
+        # Check for game over after bottom of the inning if 9 innings are complete or in extra innings
+        # The walk-off check in play_inning handles ending the game on a walk-off.
+        # We only need this check if the inning completed naturally (3 outs) and the score is no longer tied after 9+ innings.
         if inning >= num_innings and game_state[team1.name] != game_state[team2.name]:
-            break # Game ends if not tied after regulation
+             # Check if the last entry in the log was NOT a walk-off before breaking,
+             # as the walk-off already adds the game end message implicitly by breaking the inning loop.
+             # This prevents duplicate "Game End" messages.
+             if not game_log or not game_log[-1].startswith("Walk-Off"):
+                 game_log.append(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
+             break # Game ends if not tied after regulation or if tie broken in extras
 
-    # Handle extra innings if tied after regulation
-    while game_state[team1.name] == game_state[team2.name]:
-        inning += 1
-        game_log.append(f"--- Extra Inning: {inning} ---")
+    # Handle extra innings if tied after regulation and the loop didn't break
+    # The while loop condition handles continuing if tied after 9 innings.
+    # The break condition within the loop handles ending the game when the tie is broken.
+    # The final game end message is added either by a walk-off or the check after the bottom of the inning.
 
-        # Top of the inning
-        runs_team1 = play_inning(team1, team2, inning, game_log, "Top", game_state)
-        game_state[team1.name] += runs_team1
+    # If the game ended before reaching 9 innings (e.g., mercy rule in future),
+    # or if the loop finished for some unexpected reason without a walk-off or
+    # the standard end-of-inning check being met (shouldn't happen with current logic),
+    # add a final game end message here as a fallback.
+    # This fallback should only trigger if the game didn't end naturally or by walk-off.
+    if not game_log or not (game_log[-1].startswith("--- Game End:") or game_log[-1].startswith("Walk-Off")):
+         game_log.append(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
 
-        # Bottom of the inning
-        runs_team2 = play_inning(team2, team1, inning, game_log, "Bottom", game_state)
-        game_state[team2.name] += runs_team2
-
-        # Check if the tie is broken after the bottom of the inning
-        if game_state[team1.name] != game_state[team2.name]:
-            break # Game ends if the tie is broken
-
-    game_log.append(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
 
     return game_state[team1.name], game_state[team2.name], game_log
-
-# Helper function to load players from a CSV file
-def load_players_from_csv(filepath):
-    """
-    Loads player data from a CSV file and creates Batter or Pitcher objects.
-    Includes flexible header matching and error handling.
-
-    Args:
-        filepath (str): The path to the CSV file.
-
-    Returns:
-        list: A list of Batter and Pitcher objects.
-    """
-    players = []
-    try:
-        with open(filepath, mode='r', encoding='utf-8') as infile:
-            reader = csv.DictReader(infile)
-            csv_headers = [header.strip() for header in reader.fieldnames] if reader.fieldnames else []
-
-            # Create a mapping from lowercase CSV headers to original headers
-            header_map = {header.lower(): header for header in csv_headers}
-
-            row_count = 0
-            for row in reader:
-                row_count += 1
-
-                try:
-                    # Access row data using lowercase keys and the header_map
-                    # Provide default empty strings if the lowercase key isn't found
-                    # This handles truly missing columns more gracefully during access
-                    pts_str = row.get(header_map.get('pts', 'Pts'), '0').strip()
-                    onbase_str = row.get(header_map.get('onbase', 'On Base'), '0').strip() # Use 'onbase' from CSV
-                    so_str = row.get(header_map.get('so', 'SO'), '0').strip()
-                    gb_str = row.get(header_map.get('gb', 'GB'), '0').strip() # Keep GB check, default to 0 if missing
-                    fb_str = row.get(header_map.get('fo', 'FB'), '0').strip() # Map 'fo' from CSV to 'FB'
-                    bb_str = row.get(header_map.get('bb', 'BB'), '0').strip()
-                    b1_str = row.get(header_map.get('bi', '1B'), '0').strip() # Map 'bi' from CSV to '1B'
-                    b1p_str = row.get(header_map.get('bip', '1BP'), '0').strip() # Map 'bip' from CSV to '1BP'
-                    b2_str = row.get(header_map.get('b2', '2B'), '0').strip() # Map 'b2' from CSV to '2B'
-                    b3_str = row.get(header_map.get('b3', '3B'), '0').strip() # Map 'b3' from CSV to '3B'
-                    hr_str = row.get(header_map.get('hr', 'HR'), '0').strip()
-                    control_str = row.get(header_map.get('control', 'Control'), '0').strip()
-                    pu_str = row.get(header_map.get('pu', 'PU'), '0').strip()
-                    ip_limit_str = row.get(header_map.get('ip limit', 'IP Limit'), '').strip() # Map 'ip' from CSV to 'IP Limit'
-                    # Also check for 'ip' if 'ip limit' isn't found
-                    if not ip_limit_str:
-                         ip_limit_str = row.get(header_map.get('ip', 'ip'), '').strip()
-
-
-                    # Attempt to convert strings to appropriate types, with specific error handling
-                    try:
-                        pts = int(pts_str)
-                        onbase = int(onbase_str)
-                        so = int(so_str)
-                        gb = int(gb_str) # Will be 0 if 'gb' column is missing
-                        fb = int(fb_str)
-                        bb = int(bb_str)
-                        b1 = int(b1_str) # Use the mapped b1 value
-                        b1p = int(b1p_str) # Use the mapped b1p value
-                        b2 = int(b2_str) # Use the mapped b2 value
-                        b3 = int(b3_str) # Use the mapped b3 value
-                        hr = int(hr_str)
-                        control = int(control_str)
-                        pu = int(pu_str)
-                        ip_limit = float(ip_limit_str) if ip_limit_str else None # Convert to float if not empty, otherwise None
-                    except ValueError as e:
-                         print(f"Error converting numeric data in row {row_count} for player {row.get(header_map.get('name', 'Name'), 'Unknown')}: {e}. Data: {row}. Skipping row.")
-                         continue # Skip this row if numeric conversion fails
-
-
-                    player_type = row.get(header_map.get('type', 'Type'), '').strip()
-                    player_name = row.get(header_map.get('name', 'Name'), 'Unknown Player').strip()
-                    # Use the first position column found, prioritizing 'pos' then 'pos2', etc.
-                    player_position_raw = row.get(header_map.get('pos', 'Position'), '').strip()
-                    if not player_position_raw:
-                         player_position_raw = row.get(header_map.get('pos2', 'pos2'), '').strip()
-                    if not player_position_raw:
-                         player_position_raw = row.get(header_map.get('pos3', 'pos3'), '').strip()
-                    if not player_position_raw:
-                         player_position_raw = row.get(header_map.get('pos4', 'pos4'), '').strip()
-                    if not player_position_raw:
-                         player_position_raw = 'Unknown' # Default if no position found
-
-
-                    # --- Logic to infer player type if 'Type' column is missing ---
-                    # If 'Type' is not provided, try to determine based on available stats
-                    if not player_type:
-                         # If 'control' is present and looks like a number, assume it's a Pitcher
-                         if control_str and control_str.isdigit() and int(control_str) > 0: # Check if control is a positive number
-                              player_type = 'P'
-                         # If 'on base' is present and looks like a number, assume it's a Batter
-                         elif onbase_str and onbase_str.isdigit() and int(onbase_str) > 0: # Check if onbase is a positive number
-                              player_type = 'B'
-                         else:
-                              # If type cannot be determined, log a warning and skip the row
-                              print(f"Warning: Could not determine player type for row {row_count} ({player_name}). Row data: {row}. Skipping row.")
-                              continue
-
-
-                    if player_type == 'B':
-                        player = Batter(
-                            name=player_name,
-                            position=player_position_raw, # Store the raw position string from CSV
-                            onbase=onbase,
-                            so=so,
-                            gb=gb, # Use the potentially defaulted gb value
-                            fb=fb, # Use the mapped fb value
-                            bb=bb,
-                            b1=b1, # Use the mapped b1 value
-                            b1p=b1p, # Use the mapped b1p value
-                            b2=b2, # Use the mapped b2 value
-                            b3=b3, # Use the mapped b3 value
-                            hr=hr,
-                            pts=pts
-                        )
-                        players.append(player)
-                    elif player_type == 'P':
-                         # Determine pitcher role more specifically from the raw position string
-                         pitcher_role = 'P' # Default to generic P
-                         # Check for full words "Starter", "Reliever", "Closer" case-insensitively
-                         if 'STARTER' in player_position_raw.upper():
-                             pitcher_role = 'SP'
-                         elif 'RELIEVER' in player_position_raw.upper():
-                             pitcher_role = 'RP'
-                         elif 'CLOSER' in player_position_raw.upper():
-                             pitcher_role = 'CL'
-
-                         player = Pitcher(
-                            name=player_name,
-                            position=pitcher_role, # Store the determined role (SP, RP, CL, or P)
-                            control=control,
-                            pu=pu,
-                            so=so,
-                            gb=gb, # Use the potentially defaulted gb value (might not be relevant for pitchers if 'gb' is only in batter file)
-                            fb=fb, # Use the mapped fb value
-                            bb=bb,
-                            b1=b1, # Use the mapped b1 value
-                            b2=b2, # Use the mapped b2 value
-                            hr=hr,
-                            pts=pts,
-                            ip_limit=ip_limit # Pass the IP limit (from 'ip' or 'IP Limit')
-                        )
-                         players.append(player)
-                    else:
-                        # This case should ideally not be reached with the type inference logic,
-                        # but kept as a fallback.
-                        print(f"Warning: Row {row_count} has unhandled player type '{player_type}' for player {player_name}. Row data: {row}. Skipping row.")
-
-                except Exception as e:
-                    # Catch any other unexpected errors during row processing
-                    print(f"An unexpected error occurred while processing row {row_count} for player {row.get(header_map.get('name', 'Name'), 'Unknown')}: {e}. Row data: {row}. Skipping row.")
-
-    except FileNotFoundError:
-        print(f"Error: CSV file not found at {filepath}")
-        return None
-    except Exception as e:
-        # Catch errors related to opening or reading the file itself
-        print(f"An unexpected error occurred while reading the CSV file {filepath}: {e}")
-        return None
-
-    return players
-
-# Function to create a random team based on points and position requirements
-def create_random_team(all_players, team_name, min_points, max_points):
-    """
-    Creates a random team (9 starters, 1 bench, 4 SP, 6 RP/CL) from a list of players,
-    adhering to position requirements and total points limits.
-
-    Args:
-        all_players (list): A list of all available Batter and Pitcher objects.
-        team_name (str): The name for the new team.
-        min_points (int): The minimum total points for the team.
-        max_points (int): The maximum total points for the team.
-
-    Returns:
-        Team or None: A randomly generated Team object or None if team creation fails.
-    """
-    # Separate players by type
-    available_batters = [p for p in all_players if isinstance(p, Batter)]
-    available_pitchers = [p for p in all_players if isinstance(p, Pitcher)]
-
-    # Separate pitchers by role
-    available_sps = [p for p in available_pitchers if p.position == 'SP']
-    available_rps_cls = [p for p in available_pitchers if p.position in ['RP', 'CL', 'P']] # Include generic P for RP/CL pool
-
-    # Ensure enough players are available to even attempt team creation
-    if len(available_batters) < 10 or len(available_sps) < 4 or len(available_rps_cls) < 6:
-        print(f"Error: Not enough players available to form a team with the required roster size (10 Batters, 4 SP, 6 RP/CL).")
-        print(f"Available Batters: {len(available_batters)}, Available SP: {len(available_sps)}, Available RP/CL/P: {len(available_rps_cls)}")
-        return None
-
-
-    # Attempt to create a valid team within the point range and roster size
-    for attempt in range(1000): # Increased attempts
-        selected_starters = []
-        selected_bench = []
-        selected_sps = []
-        selected_rps = []
-        selected_cls = []
-        used_players = set() # Keep track of players already selected
-
-        # --- Select Pitchers (exactly 4 SP and exactly 6 RP/CL) ---
-
-        # Select Starting Pitchers (4)
-        current_sps_pool = list(available_sps) # Create a mutable copy
-        random.shuffle(current_sps_pool)
-        for _ in range(4):
-            if current_sps_pool:
-                sp = current_sps_pool.pop(0)
-                selected_sps.append(sp)
-                used_players.add(sp)
-            else:
-                # Not enough dedicated SPs, team creation failed for this attempt
-                break # Exit SP selection loop
-
-        if len(selected_sps) < 4:
-             continue # Not enough SPs selected, try again
-
-        # Select Relievers and Closers (6 total)
-        current_rps_cls_pool = [p for p in available_rps_cls if p not in used_players] # Pool of available RP/CL/P
-        random.shuffle(current_rps_cls_pool)
-
-        # Select 6 RP/CL from the available pool
-        for _ in range(6):
-             if current_rps_cls_pool:
-                  rp_cl = current_rps_cls_pool.pop(0)
-                  if rp_cl.position == 'CL':
-                       selected_cls.append(rp_cl)
-                  else: # Assumes 'RP' or 'P'
-                       selected_rps.append(rp_cl)
-                  used_players.add(rp_cl)
-             else:
-                  # Not enough RP/CL available
-                  break # Exit RP/CL selection loop
-
-
-        # Ensure exactly 6 RP/CL are selected
-        if len(selected_rps) + len(selected_cls) != 6:
-             continue # Incorrect number of RP/CL selected, try again
-
-
-        # --- Select Batters (exactly 9 starters and exactly 1 bench) ---
-
-        selected_starters_dict = {} # Use a dict to ensure one player per required position
-        available_batters_for_selection = [b for b in available_batters if b not in used_players] # Batters not used as pitchers
-
-        # Prioritize players with specific single positions first
-        single_position_batters = [b for b in available_batters_for_selection if '/' not in b.position and b.position in STARTING_POSITIONS]
-        multi_position_batters = [b for b in available_batters_for_selection if '/' in b.position or b.position not in STARTING_POSITIONS] # Includes OF, IF, etc.
-
-        random.shuffle(single_position_batters)
-        random.shuffle(multi_position_batters)
-
-        # Try to fill required positions with single-position players first
-        for required_pos in STARTING_POSITIONS:
-            if required_pos not in selected_starters_dict:
-                for batter in single_position_batters:
-                    if batter not in used_players and batter.can_play(required_pos):
-                        selected_starters_dict[required_pos] = batter
-                        used_players.add(batter)
-                        break # Move to the next required position
-
-        # Fill remaining required positions with multi-position players
-        for required_pos in STARTING_POSITIONS:
-             if required_pos not in selected_starters_dict:
-                  for batter in multi_position_batters:
-                       if batter not in used_players and batter.can_play(required_pos):
-                            selected_starters_dict[required_pos] = batter
-                            used_players.add(batter)
-                            break # Move to the next required position
-
-        # If we don't have exactly 9 starters, team creation failed for this attempt
-        if len(selected_starters_dict) != 9:
-            continue # Not enough starters selected, try again
-
-        # Convert the dictionary back to a list for the Team object, maintaining a consistent order (e.g., based on STARTING_POSITIONS)
-        selected_starters = [selected_starters_dict[pos] for pos in STARTING_POSITIONS]
-
-
-        # Select Bench Player (1) - any remaining batter not already used
-        available_bench_batters = [b for b in available_batters_for_selection if b not in used_players]
-        if available_bench_batters:
-            # Ensure we only select one bench player
-            selected_bench.append(random.choice(available_bench_batters))
-            used_players.add(selected_bench[0]) # Add to used players
-        else:
-             # Not enough batters for bench, team creation failed
-             continue # No bench player selected, try again
-
-        # Ensure exactly 1 bench player is selected
-        if len(selected_bench) != 1:
-             continue # Incorrect number of bench players, try again
-
-
-        # --- Final Roster Size Check ---
-        total_batters_selected = len(selected_starters) + len(selected_bench)
-        total_pitchers_selected = len(selected_sps) + len(selected_rps) + len(selected_cls)
-
-        if total_batters_selected != 10 or total_pitchers_selected != 10:
-             # This check should ideally not be needed if the selection logic above is correct,
-             # but it's a good safeguard.
-             print(f"DEBUG: Roster size mismatch. Batters: {total_batters_selected}, Pitchers: {total_pitchers_selected}. Expected 10 each.")
-             continue # Roster size incorrect, try again
-
-
-        # Calculate the total points of the selected team
-        current_total_points = sum(p.pts for p in selected_starters + selected_bench + selected_sps + selected_rps + selected_cls)
-
-        # Check if the team's total points are within the allowed range
-        if min_points <= current_total_points <= max_points:
-            print(f"Successfully created team {team_name} with {current_total_points} points.")
-            return Team(team_name, selected_starters, selected_sps, selected_rps, selected_cls, selected_bench)
-        else:
-            # print(f"Attempt {attempt+1}: Team points {current_total_points} outside range [{min_points}, {max_points}]. Retrying...") # Keep this commented unless debugging point limits
-            continue # Points outside range, try again
-
-    print(f"Failed to create a valid team within the point range and roster requirements after {attempt+1} attempts.")
-    return None # Return None if team creation failed after all attempts
 

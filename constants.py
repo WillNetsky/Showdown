@@ -1,35 +1,36 @@
 # constants.py
+# Stores various constants used throughout the baseball simulation project.
 
-# Base numbers are from 2000's MLB Showdown
-# You can adjust these to change the power of players. Keep them as integers.
-# BASE_RUNNERS = ["None", "1B", "2B", "3B", "1B+2B"] # This constant is not used in the current logic
-POSITIONS = ["C", "1B", "2B", "3B", "SS", "LFRF", "CF", "LFRF"] # Note: LFRF appears twice, P is missing
-
-pitcher_hit_results = ['BB','1B','2B','HR']
-batter_hit_results = ['BB','1B','1BP','2B','3B','HR']
-
-# Mapping of CSV position values to required positions
+# Mapping of common position abbreviations to full names (not strictly used in current logic, but good for reference)
 POSITION_MAPPING = {
-    'CF': ['CF'],
-    'SS': ['SS'],
-    'LFRF': ['LF', 'RF'],
-    '3B': ['3B'],
-    '2B': ['2B'],
-    '1B': ['1B'],
     'C': ['C'],
-    'OF': ['LF', 'CF', 'RF'],
+    '1B': ['1B'],
+    '2B': ['2B'],
+    '3B': ['3B'],
+    'SS': ['SS'],
     'LF': ['LF'],
-    'DH': ['DH'], # DH is a special case, handled in selection logic
+    'CF': ['CF'],
+    'RF': ['RF'],
+    'OF': ['LF', 'CF', 'RF'], # For players who can play any outfield position
+    'IF': ['1B', '2B', '3B', 'SS'], # For players who can play any infield position
+    'LFRF': ['LF', 'RF'], # Added back the LFRF mapping
+    'P': ['P'],
+    'SP': ['SP'],
+    'RP': ['RP'],
+    'CL': ['CL'],
     '2B-1B-3B': ['1B', '2B', '3B'],
     '1B-3B': ['1B', '3B'],
     '2B-3B': ['2B', '3B'],
-    '2B-1B': ['1B', '2B'],
-    'IF': ['1B', '2B', '3B', 'SS']
+    '2B-1B': ['1B', '2B']
 }
 
-# Required starting positions for the lineup
-STARTING_POSITIONS = ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"]
+# The required starting positions for a team lineup (excluding Pitcher, which is handled separately)
+STARTING_POSITIONS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH']
 
-# Minimum and Maximum total points allowed for a team (9 starters + 1 bench + 4 SP + 6 RP/CL = 20 players)
+# Default minimum and maximum total points for team creation (Updated range)
 MIN_TEAM_POINTS = 4500
 MAX_TEAM_POINTS = 5000
+
+# Placeholder for potential hit result mappings (currently handled by player ranges)
+# pitcher_hit_results = { ... }
+# batter_hit_results = { ... }
