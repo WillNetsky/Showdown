@@ -17,6 +17,7 @@ class Batter:
             b1 (int): Single range end.
             b1p (int): Single + Batter takes 2nd range end.
             b2 (int): Double range end.
+            b2 (int): Double range end. # Corrected typo, should be b2
             b3 (int): Triple range end.
             hr (int): Home run range end.
             pts (int): The player's points value from the CSV.
@@ -34,13 +35,14 @@ class Batter:
         self.b1p = b1p
         self.b2 = b2
         self.b3 = b3
-        self.pts = pts # Added points attribute
-        self.year = year # Added year attribute
-        self.set = set # Added set attribute
+        self.pts = pts
+        self.year = year
+        self.set = set
 
-        # Cap HR at 0 if the original value is > 20, as strategy cards are not implemented
+        # Cap HR at 20 if the original value is > 20, as strategy cards are not implemented
+        # This logic might need refinement based on exact card rules, but keeps it within 1-20 range.
         if hr > 20:
-            self.hr = 0
+            self.hr = 20 # Cap at 20, not 0, if the value is out of standard range
         else:
             self.hr = hr
 
@@ -49,21 +51,21 @@ class Batter:
 
         # Stats to track during the game
         self.plate_appearances = 0
-        self.at_bats = 0
+        self.at_bats = 0 # Added At Bats tracking
         self.runs_scored = 0
-        self.rbi = 0 # Added RBI attribute
+        self.rbi = 0
         self.singles = 0
         self.doubles = 0
         self.triples = 0
-        self.home_runs = 0
+        self.home_runs = 0 # This is home runs *hit* by the batter
         self.walks = 0
-        self.strikeouts = 0
-        self.outs = 0 # Total outs recorded by this batter
+        self.strikeouts = 0 # Added Strikeouts tracking for batters
+        self.outs = 0 # Total outs recorded by this batter (this is more for game flow, not standard boxscore K)
 
     def can_play(self, required_position):
         """
         Checks if the batter can play a required position based on the mapping.
-        Handles the special DH rule.
+        Handles the special DH rule and multi-position players.
 
         Args:
             required_position (str): The required position to check against (e.g., '1B', 'CF', 'DH').
@@ -71,8 +73,11 @@ class Batter:
         Returns:
             bool: True if the batter can play the position, False otherwise.
         """
-        # Split the player's listed position(s) from the CSV by '/'
-        csv_positions = [pos.strip() for pos in self.position.split('/') if pos.strip()] # Split and remove empty strings
+        # Handle 'Unknown' position explicitly
+        if self.position == 'Unknown':
+            return False
+
+        csv_positions = [pos.strip() for pos in self.position.split('/')]
 
         # Special rule for DH: if 'DH' is listed on the card, they can ONLY be a DH.
         if 'DH' in csv_positions:
@@ -82,20 +87,45 @@ class Batter:
         if required_position == 'DH':
              # Any batter can be a DH if their card doesn't explicitly say DH (handled above)
              # and they are not already selected for another position.
-             # The selection logic in create_random_team will handle if they are already selected.
-             return True # For the purpose of this function, any non-DH-only player can be a DH
+             return True
 
         # For other positions, check the mapping
-        # Use the POSITION_MAPPING from constants.py
         from constants import POSITION_MAPPING # Import here to avoid circular dependency
 
         for csv_pos in csv_positions:
             # Get the list of positions this CSV position maps to
-            mapped_positions = POSITION_MAPPING.get(csv_pos, [])
-            if required_position in mapped_positions:
-                return True
+            # Ensure POSITION_MAPPING values are lists or handle single string
+            mapped_positions = POSITION_MAPPING.get(csv_pos)
+            if isinstance(mapped_positions, list):
+                 if required_position in mapped_positions:
+                     return True
+            elif isinstance(mapped_positions, str):
+                 if required_position == mapped_positions:
+                      return True
+
 
         return False
+
+
+    def calculate_avg(self):
+        """Calculates batting average (Hits / At Bats)."""
+        total_hits = self.singles + self.doubles + self.triples + self.home_runs
+        if self.at_bats == 0:
+            return 0.000
+        return total_hits / self.at_bats
+
+    def calculate_ops(self):
+        """Calculates On-base Plus Slugging (OBP + SLG)."""
+        total_hits = self.singles + self.doubles + self.triples + self.home_runs
+        # Calculate On-base Percentage (OBP)
+        obp_denominator = self.at_bats + self.walks # Assuming no HBP or Sacrifice flies in current sim
+        obp = (total_hits + self.walks) / obp_denominator if obp_denominator > 0 else 0.0
+
+        # Calculate Slugging Percentage (SLG)
+        total_bases = (self.singles * 1) + (self.doubles * 2) + (self.triples * 3) + (self.home_runs * 4)
+        slg = total_bases / self.at_bats if self.at_bats > 0 else 0.0
+
+        return obp + slg
 
 
     def __str__(self):
@@ -111,11 +141,9 @@ class Batter:
         elif self.set:
              display_name = f"{self.name} - {self.set}"
 
-        # Concise stats display
-        stats_display = (f"PA: {self.plate_appearances}, AB: {self.at_bats}, R: {self.runs_scored}, "
-                         f"H: {self.singles + self.doubles + self.triples + self.home_runs}, " # Total Hits
-                         f"1B: {self.singles}, 2B: {self.doubles}, 3B: {self.triples}, HR: {self.home_runs}, "
-                         f"BB: {self.walks}, RBI: {self.rbi}, Outs: {self.outs}")
+        # Simplified stats display for now - will be formatted in main.py
+        stats_display = f"PA: {self.plate_appearances}, R: {self.runs_scored}, RBI: {self.rbi}"
+
 
         return f"{display_name} ({self.position}, {self.pts} pts) | {stats_display}"
 
@@ -145,7 +173,7 @@ class Pitcher:
             bb (int): Walk range end.
             b1 (int): Single range end.
             b2 (int): Double range end.
-            hr (int): Home run range end.
+            hr (int): Home run range end. # This is the HR *range* on the card
             pts (int): The player's points value from the CSV.
             ip_limit (float, optional): The innings pitched limit for this pitcher (can be fractional). Defaults to None.
             year (str, optional): The year of the player's card. Defaults to None.
@@ -161,11 +189,11 @@ class Pitcher:
         self.bb = bb
         self.b1 = b1
         self.b2 = b2
-        self.hr = hr # Pitchers can also have HR allowed ranges
-        self.pts = pts # Added points attribute
-        self.ip_limit = ip_limit # Added IP limit attribute
-        self.year = year # Added year attribute
-        self.set = set # Added set attribute
+        self.hr = hr # Pitchers can also have HR allowed ranges (from card)
+        self.pts = pts
+        self.ip_limit = ip_limit
+        self.year = year
+        self.set = set
 
         # Calculate the 'Out' range end based on PU, SO, GB, FB
         self.out = pu + so + gb + fb
@@ -176,9 +204,19 @@ class Pitcher:
         self.earned_runs_allowed = 0 # Simplified - doesn't track errors yet
         self.hits_allowed = 0
         self.walks_allowed = 0
-        self.strikeouts_thrown = 0
+        self.strikeouts_thrown = 0 # Corrected attribute name for clarity
         self.outs_recorded = 0 # Total outs recorded by this pitcher
         self.innings_pitched = 0.0 # Track innings pitched
+        self.home_runs_allowed = 0 # Added stat to track HRs allowed during the game
+
+
+    def calculate_era(self):
+        """Calculates Earned Run Average (ERA)."""
+        # ERA = (Earned Runs * 9) / Innings Pitched
+        # Handle cases where IP is 0
+        if self.innings_pitched == 0:
+            return 0.00 # Or potentially infinity, but 0.00 is common in boxscores for 0 IP
+        return (self.earned_runs_allowed * 9.0) / self.innings_pitched
 
 
     def __str__(self):
@@ -197,7 +235,7 @@ class Pitcher:
         ip_limit_display = f"IP Limit: {self.ip_limit:.1f}" if self.ip_limit is not None else "IP Limit: N/A"
 
 
-        # Concise stats display
+        # Concise stats display - will be formatted in main.py
         stats_display = (f"IP: {self.innings_pitched:.1f}, BF: {self.batters_faced}, "
                          f"H: {self.hits_allowed}, R: {self.runs_allowed}, ER: {self.earned_runs_allowed}, "
                          f"BB: {self.walks_allowed}, SO: {self.strikeouts_thrown}")
@@ -209,6 +247,8 @@ class Pitcher:
         """
         Returns a developer-friendly string representation of the Pitcher object.
         """
+        # Removed the incorrect reference to b3
         return (f"Pitcher(name='{self.name}', position='{self.position}', control={self.control}, "
                 f"pu={self.pu}, so={self.so}, gb={self.gb}, fb={self.fb}, bb={self.bb}, "
-                f"b1={self.b1}, b2={self.b2}, b3={self.b3}, hr={self.hr}, pts={self.pts}, ip_limit={self.ip_limit}, year='{self.year}', set='{self.set}')")
+                f"b1={self.b1}, b2={self.b2}, hr={self.hr}, pts={self.pts}, ip_limit={self.ip_limit}, year='{self.year}', set='{self.set}')")
+
