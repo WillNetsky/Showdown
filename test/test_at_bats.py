@@ -11,8 +11,8 @@ from entities import Batter, Pitcher
 from game_logic import get_chart_result # Only need get_chart_result, roll_dice is not used for exhaustive test
 
 # Assume CSV files are in the same directory or a known path
-BATTERS_FILE = 'all_batters.csv'
-PITCHERS_FILE = 'all_pitchers.csv'
+BATTERS_FILE = '../all_batters.csv'
+PITCHERS_FILE = '../all_pitchers.csv'
 
 def main():
     """

@@ -27,7 +27,7 @@ POSITION_MAPPING = {
 # The required starting positions for a team lineup (excluding Pitcher, which is handled separately)
 STARTING_POSITIONS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH']
 
-# Default minimum and maximum total points for team creation (Updated range)
+# Default minimum and maximum total points for team creation
 MIN_TEAM_POINTS = 4500
 MAX_TEAM_POINTS = 5000
 
