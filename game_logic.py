@@ -1,16 +1,12 @@
 # game_logic.py
-# Contains the functions for simulating gameplay.
+# Contains the functions for simulating gameplay and displaying results.
 
 import random
-# Removed csv, os, glob imports as they are no longer needed in this file
-# Removed load_players_from_csv and create_random_team as they have been moved
+import math # Import math for floating point comparison
 
 # Import necessary classes and constants from other modules
-# Removed pitcher_hit_results and batter_hit_results from import as they are not used
-from entities import Batter, Pitcher # Import Batter and Pitcher classes
-from team import Team # Team class is still needed here for type hinting and object creation
+from entities import Batter, Pitcher, Team # Import Batter, Pitcher, and Team classes
 from constants import POSITION_MAPPING, STARTING_POSITIONS, MIN_TEAM_POINTS, MAX_TEAM_POINTS
-import math # Import math for floating point comparison
 
 def roll_dice(num_dice, sides):
     """
@@ -320,7 +316,9 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
     # Update stats and runners based on the result
     if result == "Out":
         batter.outs += 1
+        # --- CORRECTED: Use outs_recorded instead of total_outs_pitched ---
         pitcher.outs_recorded += 1
+        # --- END CORRECTED ---
         # IP is updated in play_inning based on outs
     elif result == "BB":
         batter.walks += 1
@@ -339,7 +337,6 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
             batter.triples += 1
         elif result == "HR":
             batter.home_runs += 1
-            pitcher.home_runs_allowed += 1 # Increment HR allowed for pitcher
             # Calculate runs scored on the HR based on who was on base + the batter
             runs_scored_on_hr = sum(1 for r in runners if r is not None) + 1
             pitcher.runs_allowed += runs_scored_on_hr
@@ -366,7 +363,9 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
         inning_log.append(f"Warning: Unhandled result '{result}' for {batter.name}. Treating as Out.")
         result = "Out"
         batter.outs += 1
+        # --- CORRECTED: Use outs_recorded instead of total_outs_pitched ---
         pitcher.outs_recorded += 1
+        # --- END CORRECTED ---
         # IP is updated in play_inning based on outs
 
     # Update RBI for the batter who drove in runs
@@ -403,11 +402,6 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
     # Get the current pitcher at the start of the inning
     pitcher = pitching_team.current_pitcher
-    # --- Debug print: Pitcher at start of inning ---
-    # Corrected debug print to use get_formatted_ip()
-    print(f"DEBUG: Start of {half_inning} {inning_number}, Pitcher: {pitcher.name if pitcher else 'None'}, IP: {pitcher.get_formatted_ip() if pitcher else 'N/A'}, Outs Recorded: {pitcher.outs_recorded if pitcher else 'N/A'}, Limit: {pitcher.ip_limit if pitcher else 'N/A'}")
-    # --- End Debug print ---
-
     if pitcher is None:
         inning_log.append("Error: Pitcher not available for pitching team at start of inning.")
         game_log.extend(inning_log)
@@ -415,9 +409,8 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
     # Check for pitching change right at the start of the inning if the pitcher is already at their limit
     # This handles cases where a pitcher finished the previous inning over their limit
-    # --- CORRECTED: Compare outs_recorded to ip_limit ---
-    if pitcher and pitcher.ip_limit is not None and pitcher.outs_recorded >= pitcher.ip_limit:
-        inning_log.append(f"Pitching Change: {pitcher.name} ({pitcher.get_formatted_ip()} IP, {pitcher.outs_recorded} outs) reached IP limit and is replaced.")
+    if pitcher and pitcher.ip_limit is not None and pitcher.innings_pitched >= pitcher.ip_limit:
+        inning_log.append(f"Pitching Change: {pitcher.name} ({pitcher.innings_pitched:.1f} IP) reached IP limit and is replaced.")
         # Pass batting_team to handle_pitching_change
         pitcher = handle_pitching_change(pitching_team, batting_team, inning_number, half_inning, game_state, inning_log)
         # If handle_pitching_change returns None, the inning cannot continue
@@ -438,11 +431,8 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
         # --- Check for pitching change BEFORE the plate appearance if facing this batter exceeds limit ---
         # This handles cases where a pitcher is just under their limit and the next batter would push them over
-        # Also check if pitcher is not None before accessing attributes
-        # --- CORRECTED: Compare outs_recorded + 1 to ip_limit ---
-        # We add 1 because each plate appearance will result in at least one out or a batter on base (which could lead to an out later)
-        if pitcher and pitcher.ip_limit is not None and (pitcher.outs_recorded + 1 > pitcher.ip_limit):
-             inning_log.append(f"Pitching Change: {pitcher.name} ({pitcher.get_formatted_ip()} IP, {pitcher.outs_recorded} outs) is replaced to avoid exceeding IP limit.")
+        if pitcher and pitcher.ip_limit is not None and (pitcher.innings_pitched + (1/3) > pitcher.ip_limit):
+             inning_log.append(f"Pitching Change: {pitcher.name} ({pitcher.innings_pitched:.1f} IP) is replaced to avoid exceeding IP limit.")
              # Pass batting_team to handle_pitching_change
              pitcher = handle_pitching_change(pitching_team, batting_team, inning_number, half_inning, game_state, inning_log)
              # If handle_pitching_change returns None, the inning cannot continue
@@ -454,19 +444,9 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
         if pitcher is None:
              break
 
-        # --- Debug print: Before play_ball ---
-        # Corrected debug print to use get_formatted_ip()
-        print(f"DEBUG: Before play_ball: Batter {current_batter.name}, Pitcher {pitcher.name}, Outs {outs}, Pitcher IP: {pitcher.get_formatted_ip()}, Pitcher Outs: {pitcher.outs_recorded}, Runners {[r.name if r else 'None' for r in runners]}")
-        # --- End Debug print ---
 
         result, runs_this_play, runners = play_ball(current_batter, pitcher, inning_log, runners)
         runs_scored_this_inning += runs_this_play
-
-        # --- Debug print: After play_ball ---
-        # Corrected debug print to use get_formatted_ip()
-        print(f"DEBUG: After play_ball: Result {result}, Runs this play {runs_this_play}, New Runners {[r.name if r else 'None' for r in runners]}, Pitcher IP: {pitcher.get_formatted_ip()}, Pitcher Outs: {pitcher.outs_recorded}")
-        # --- End Debug print ---
-
 
         # --- Check for Walk-Off ---
         # If it's the bottom of the 9th or later, and the home team (batting_team) takes the lead
@@ -485,16 +465,14 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
         # Update pitcher IP *after* the play if it was an out
         if result == "Out":
-            # outs_recorded is already incremented in play_ball
-            # --- CORRECTED: Calculate innings_pitched based on outs_recorded ---
-            pitcher.innings_pitched = pitcher.outs_recorded / 3.0
-            # --- END CORRECTED ---
-            # Round to one decimal place for display purposes in debug prints/logs,
-            # but the internal value used for get_formatted_ip is the more precise one.
-            # pitcher.innings_pitched = round(pitcher.innings_pitched, 1) # Removed this rounding
+            pitcher.innings_pitched += 1/3
+            # Round to one decimal place to avoid floating point issues with thirds
+            pitcher.innings_pitched = round(pitcher.innings_pitched, 1)
             outs += 1
-        # Note: Errors are not currently simulated in play_ball, so no explicit error handling here.
-        # If play_ball were updated to return an "Error" result, it would need handling here.
+        elif result == "Error": # Handle errors from play_ball
+             outs += 1 # Treat unknown results as outs for now
+             pitcher.innings_pitched += 1/3
+             pitcher.innings_pitched = round(pitcher.innings_pitched, 1)
 
 
     inning_log.append(f"End of {half_inning} {inning_number}, {runs_scored_this_inning} run(s) scored.")
@@ -526,12 +504,7 @@ def handle_pitching_change(pitching_team: Team, batting_team: Team, inning_numbe
     next_pitcher = None
 
     # Create a combined list of available relievers and closers
-    # --- Debug print: Available RP/CL pool ---
     available_rp_cl = pitching_team.get_available_reliever_or_closer_pool()
-    print(f"DEBUG: handle_pitching_change called. Available RP/CL pool size: {len(available_rp_cl)}")
-    if available_rp_cl:
-        print(f"DEBUG: Available RP/CL names: {[p.name for p in available_rp_cl]}")
-    # --- End Debug print ---
 
     if available_rp_cl:
         # Select a random pitcher from the available pool
@@ -545,18 +518,9 @@ def handle_pitching_change(pitching_team: Team, batting_team: Team, inning_numbe
         else: # Assumes 'RP' or 'P'
             pitching_team.used_relievers.append(next_pitcher)
             inning_log.append(f"Pitching Change: {pitching_team.current_pitcher.name} enters the game (Reliever).")
-
-        # --- Debug print: Selected new pitcher ---
-        print(f"DEBUG: Selected new pitcher: {next_pitcher.name}")
-        # --- End Debug print ---
-
     else:
         inning_log.append("Error: No available relievers or closers for pitching change.")
         pitching_team.current_pitcher = None # No pitcher available
-        # --- Debug print: No available pitchers ---
-        print("DEBUG: No available relievers or closers found.")
-        # --- End Debug print ---
-
 
     return pitching_team.current_pitcher
 
@@ -566,37 +530,33 @@ def play_game(team1: Team, team2: Team, num_innings=9):
     Simulates a complete game between two teams.
 
     Args:
-        team1 (Team): The first team object.
-        team2 (Team): The second team object.
-        num_innings (int, optional): The number of innings to play. Defaults to 9.
+        team1 (Team): The first team object (Away).
+        team2 (Team): The second team object (Home).
+        num_innings (int, optional): The number of innings to play initially. Defaults to 9.
 
     Returns:
-        tuple: (score1, score2, game_log, team1_inning_runs, team2_inning_runs, team1_total_hits, team2_total_hits, team1_total_errors, team2_total_errors)
-        score1 (int): Final score for team1.
-        score2 (int): Final score for team2.
-        game_log (list): List of strings representing the game log.
-        team1_inning_runs (list): List of runs scored by team1 in each inning.
-        team2_inning_runs (list): List of runs scored by team2 in each inning.
-        team1_total_hits (int): Total hits for team1.
-        team2_total_hits (int): Total hits for team2.
-        team1_total_errors (int): Total errors for team1 (estimated).
-        team2_total_errors (int): Total errors for team2 (estimated).
+        tuple: (score1, score2, game_log, team1_inning_runs, team2_inning_runs) -
+               The final scores, game log, and lists of runs scored per inning for each team.
     """
     game_state = {
         team1.name: 0,
         team2.name: 0
     }
     game_log = []
+    current_inning = 1
+
+    # Lists to store runs scored per inning for the linescore
     team1_inning_runs = []
     team2_inning_runs = []
 
     game_log.append(f"--- Game Start: {team1.name} vs. {team2.name} ---")
 
     # Set the initial starting pitchers for each team
-    # This was previously handled in Team.__init__ but needs to be here
-    # to ensure pitchers are set before the first inning.
     if team1.starters:
         team1.current_pitcher = team1.starters[0]
+        # Ensure used_starters is initialized (should be in Team.__init__)
+        if not hasattr(team1, 'used_starters'):
+             team1.used_starters = []
         team1.used_starters.append(team1.current_pitcher)
     else:
         game_log.append(f"Warning: {team1.name} has no starting pitchers.")
@@ -604,73 +564,155 @@ def play_game(team1: Team, team2: Team, num_innings=9):
 
     if team2.starters:
         team2.current_pitcher = team2.starters[0]
+        # Ensure used_starters is initialized (should be in Team.__init__)
+        if not hasattr(team2, 'used_starters'):
+             team2.used_starters = []
         team2.used_starters.append(team2.current_pitcher)
     else:
          game_log.append(f"Warning: {team2.name} has no starting pitchers.")
          team2.current_pitcher = None # Ensure it's None if no SPs
 
 
-    for inning in range(1, num_innings + 1):
+    # --- Modified game loop for extra innings and collecting inning scores ---
+    game_over = False
+    while not game_over:
         # Top of the inning: Team 1 bats, Team 2 pitches
-        runs_team1_this_inning = play_inning(team1, team2, inning, game_log, "Top", game_state)
-        team1_inning_runs.append(runs_team1_this_inning)
+        runs_team1_this_inning = play_inning(team1, team2, current_inning, game_log, "Top", game_state)
+        team1_inning_runs.append(runs_team1_this_inning) # Record runs for the inning
 
-        # Check for game over after top of inning in extra innings if home team is winning
-        if inning >= num_innings and game_state[team2.name] > game_state[team1.name]:
-             # Game ends if home team is winning after the top of an extra inning
-             game_log.append(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
-             break # End the game
+        # Check for game end after the top of the 9th or later if the away team is ahead
+        if current_inning >= num_innings and game_state[team1.name] > game_state[team2.name]:
+            game_log.append(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
+            game_over = True
+            # Add 0 runs for the bottom of the inning if it wasn't played
+            team2_inning_runs.append(0)
+            break # End the game
 
         # Bottom of the inning: Team 2 bats, Team 1 pitches
-        # Only play bottom of 9th or later if Team 2 is not already winning OR it's not the 9th inning yet
-        # The walk-off logic in play_inning handles ending the game if Team 2 takes the lead in the bottom 9+
-        runs_team2_this_inning = 0 # Initialize runs for bottom inning
-        if inning < num_innings or game_state[team2.name] <= game_state[team1.name]:
-             runs_team2_this_inning = play_inning(team2, team1, inning, game_log, "Bottom", game_state)
-        team2_inning_runs.append(runs_team2_this_inning)
+        # Only play the bottom of the inning if the game is not already over
+        # AND (it's before the 9th inning OR the score is tied OR the home team is trailing)
+        runs_team2_this_inning = 0 # Initialize runs for the bottom half
+        if not game_over and (current_inning < num_innings or game_state[team2.name] <= game_state[team1.name]):
+             runs_team2_this_inning = play_inning(team2, team1, current_inning, game_log, "Bottom", game_state)
+        team2_inning_runs.append(runs_team2_this_inning) # Record runs for the inning
 
 
-        # Check for game over after bottom of the inning if 9 innings are complete or in extra innings
-        # The walk-off check in play_inning handles ending the game on a walk-off.
-        # We only need this check if the inning completed naturally (3 outs) and the score is no longer tied after 9+ innings.
-        if inning >= num_innings and game_state[team1.name] != game_state[team2.name]:
-             # Check if the last entry in the log was NOT a walk-off before breaking,
-             # as the walk-off already adds the game end message implicitly by breaking the inning loop.
-             # This prevents duplicate "Game End" messages.
+        # Check for game end after the bottom of the inning
+        # Game ends if 9 innings are complete AND the score is NOT tied
+        # OR if a walk-off occurred in the bottom of the 9th or later (handled within play_inning)
+        if current_inning >= num_innings and game_state[team1.name] != game_state[team2.name]:
+             # Check if the last entry in the log was NOT a walk-off before adding the game end message
              if not game_log or not game_log[-1].startswith("Walk-Off"):
                  game_log.append(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
-             break # Game ends if not tied after regulation or if tie broken in extras
+             game_over = True
+             break # End the game
 
-    # Handle extra innings if tied after regulation and the loop didn't break
-    # The while loop condition handles continuing if tied after 9 innings.
-    # The break condition within the loop handles ending the game when the tie is broken.
-    # The final game end message is added either by a walk-off or the check after the bottom of the inning.
+        # If the game is still tied after the bottom of the 9th or later, continue to the next inning
+        if current_inning >= num_innings and game_state[team1.name] == game_state[team2.name]:
+            game_log.append(f"--- Score tied {game_state[team1.name]}-{game_state[team2.name]} after {current_inning} innings. Going to extra innings. ---")
+            current_inning += 1
+            continue # Continue to the next inning
 
-    # If the game ended before reaching 9 innings (e.g., mercy rule in future),
-    # or if the loop finished for some unexpected reason without a walk-off or
-    # the standard end-of-inning check being met (shouldn't happen with current logic),
-    # add a final game end message here as a fallback.
-    # This fallback should only trigger if the game didn't end naturally or by walk-off.
-    if not game_log or not (game_log[-1].startswith("--- Game End:") or game_log[-1].startswith("Walk-Off")):
-         game_log.append(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
-
-
-    # Calculate total hits and estimate errors after the game
-    # Total hits for a team is the sum of singles, doubles, triples, and home runs for all batters on that team.
-    team1_total_hits = sum(b.singles + b.doubles + b.triples + b.home_runs for b in team1.batters + team1.bench)
-    team2_total_hits = sum(b.singles + b.doubles + b.triples + b.home_runs for b in team2.batters + team2.bench)
-
-    # Estimating errors is tricky without fielding simulation.
-    # A simple (but not entirely accurate) estimation could be based on outs recorded by the pitching team.
-    # This is a placeholder and would need refinement with actual fielding logic.
-    # For now, let's just return 0 for errors as fielding isn't simulated.
-    team1_total_errors = 0
-    team2_total_errors = 0
+        # If 9 innings are complete and the home team is winning, the game is over
+        # This case should be covered by the walk-off check in play_inning for the bottom of the 9th or later.
+        # However, as a safeguard, explicitly check here too.
+        if current_inning >= num_innings and game_state[team2.name] > game_state[team1.name]:
+             game_log.append(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
+             game_over = True
+             break # End the game
 
 
-    # Return all 9 expected values
-    return (game_state[team1.name], game_state[team2.name], game_log,
-            team1_inning_runs, team2_inning_runs,
-            team1_total_hits, team2_total_hits,
-            team1_total_errors, team2_total_errors)
+        # If 9 innings haven't been reached yet, just increment the inning
+        if current_inning < num_innings:
+             current_inning += 1
+             continue # Continue to the next inning
+
+        # Fallback to end the game if none of the above conditions were met (shouldn't happen with correct logic)
+        if not game_over:
+             game_log.append(f"--- Game End (Fallback): {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
+             game_over = True
+
+
+    return game_state[team1.name], game_state[team2.name], game_log, team1_inning_runs, team2_inning_runs
+
+def display_linescore(team1_name, team2_name, team1_inning_runs, team2_inning_runs, final_score1, final_score2):
+    """
+    Prints a formatted linescore for the game.
+
+    Args:
+        team1_name (str): Name of the first team (Away).
+        team2_name (str): Name of the second team (Home).
+        team1_inning_runs (list): List of runs scored by team1 in each inning.
+        team2_inning_runs (list): List of runs scored by team2 in each inning.
+        final_score1 (int): Final score for team1.
+        final_score2 (int): Final score for team2.
+    """
+    print("\n--- Linescore ---")
+
+    # Determine the maximum number of innings played
+    max_innings = max(len(team1_inning_runs), len(team2_inning_runs))
+
+    # Create the header row
+    header = ["Team"] + [str(i + 1) for i in range(max_innings)] + ["R", "H"] # Add H column placeholder
+    print(" | ".join(header))
+    print("-" * (len(" | ".join(header)) + 2)) # Separator line
+
+    # Print Team 1 (Away) row
+    team1_row = [team1_name] + [str(runs) for runs in team1_inning_runs]
+    # Pad with empty strings if fewer than max_innings
+    team1_row += [""] * (max_innings - len(team1_inning_runs))
+    team1_row += [str(final_score1), "?"] # Add R and H (H is placeholder for now)
+    print(" | ".join(team1_row))
+
+    # Print Team 2 (Home) row
+    team2_row = [team2_name] + [str(runs) for runs in team2_inning_runs]
+    # Pad with empty strings if fewer than max_innings
+    team2_row += [""] * (max_innings - len(team2_inning_runs))
+    team2_row += [str(final_score2), "?"] # Add R and H (H is placeholder for now)
+    print(" | ".join(team2_row))
+    print("-" * (len(" | ".join(header)) + 2)) # Separator line
+
+
+def display_boxscore(team: Team):
+    """
+    Prints a formatted boxscore for a given team.
+
+    Args:
+        team (Team): The Team object to display the boxscore for.
+    """
+    print(f"\n--- {team.name} Boxscore ---")
+
+    # Batting Stats Header
+    # Added OPS+ column placeholder
+    print("\nBatting:")
+    # Adjusted spacing for batting stats
+    print(f"{'Name':<20} {'Pos':<5} {'PA':<3} {'AB':<3} {'R':<3} {'H':<3} {'RBI':<3} {'BB':<3} {'SO':<3} {'AVG':<5} {'OBP':<5} {'SLG':<5} {'OPS':<5}")
+    print("-" * 90) # Adjusted separator length
+
+    # Display Batting Stats for Starters and Bench
+    for player in team.batters + team.bench:
+        # Calculate derived stats
+        avg = player.calculate_avg()
+        obp = player.calculate_obp()
+        slg = player.calculate_slg()
+        ops = player.calculate_ops()
+
+        # Format and print batting stats
+        print(f"{player.name:<20} {player.position:<5} {player.plate_appearances:<3} {player.at_bats:<3} {player.runs_scored:<3} {player.hits:<3} {player.rbi:<3} {player.walks:<3} {player.strikeouts:<3} {avg:<5.3f} {obp:<5.3f} {slg:<5.3f} {ops:<5.3f}")
+
+    # Pitching Stats Header
+    print("\nPitching:")
+    # Adjusted spacing for pitching stats
+    print(f"{'Name':<20} {'Role':<5} {'IP':<5} {'BF':<4} {'R':<3} {'ER':<3} {'H':<3} {'BB':<3} {'SO':<3} {'ERA':<5} {'WHIP':<5}")
+    print("-" * 90) # Adjusted separator length
+
+    # Display Pitching Stats for all Pitchers
+    for pitcher in team.all_pitchers:
+        # Calculate derived stats
+        era = pitcher.calculate_era()
+        whip = pitcher.calculate_whip()
+        formatted_ip = pitcher.get_formatted_ip() # Use the formatted IP
+
+        # Format and print pitching stats
+        print(f"{pitcher.name:<20} {pitcher.team_role:<5} {formatted_ip:<5} {pitcher.batters_faced:<4} {pitcher.runs_allowed:<3} {pitcher.earned_runs_allowed:<3} {pitcher.hits_allowed:<3} {pitcher.walks_allowed:<3} {pitcher.strikeouts_thrown:<3} {era:<5.2f} {whip:<5.2f}")
 

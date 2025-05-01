@@ -1,5 +1,5 @@
 # entities.py
-# Defines the classes for Batter and Pitcher players.
+# Defines the classes for Batter, Pitcher, and Team.
 
 # Import necessary constants
 from constants import POSITION_MAPPING # Import POSITION_MAPPING
@@ -76,7 +76,7 @@ class Batter:
         self.plate_appearances = 0
         self.at_bats = 0
         self.runs_scored = 0
-        self.rbi = 0
+        self.rbi = 0 # Added RBI attribute
         self.singles = 0
         self.doubles = 0
         self.triples = 0
@@ -345,3 +345,104 @@ class Pitcher:
                 f"b1={self.b1}, b2={self.b2}, hr={self.hr}, pts={self.pts}, ip_limit={self.ip_limit}, "
                 f"year='{self.year}', set_name='{self.set}', team_role='{self.team_role}')")
 
+class Team:
+    def __init__(self, name, batters, starters, relievers, closers, bench):
+        """
+        Initializes a Team object with specific pitcher roles and a bench.
+
+        Args:
+            name (str): The name of the team.
+            batters (list): A list of Batter objects for the starting lineup (9 players).
+            starters (list): A list of Pitcher objects who are starters.
+            relievers (list): A list of Pitcher objects who are relievers.
+            closers (list): A list of Pitcher objects who are closers.
+            bench (list): A list of Batter objects for the bench.
+        """
+        self.name = name
+        self.batters = batters # This is now explicitly the starting lineup
+        self.starters = starters
+        self.relievers = relievers
+        self.closers = closers
+        self.bench = bench # Added bench attribute
+        # Combine all pitchers into one list for easier iteration if needed
+        self.all_pitchers = starters + relievers + closers
+        # Set the initial current pitcher - prefer SP, then RP, then CL
+        self.current_pitcher = None
+        if self.starters:
+            self.current_pitcher = self.starters[0]
+        elif self.relievers:
+            self.current_pitcher = self.relievers[0]
+        elif self.closers:
+            self.current_pitcher = self.closers[0]
+
+
+        self.current_batter_index = 0 # Index of the next batter in the lineup
+
+        # Keep track of which relievers/closers have already pitched
+        # Note: Starters are not added to used_relievers/used_closers
+        self.used_relievers = []
+        self.used_closers = []
+        # --- ADDED: Track used starters separately ---
+        self.used_starters = []
+        # --- END ADDED ---
+
+        # --- DEBUG PRINT ---
+        print(f"DEBUG: Team '{self.name}' initialized. Has 'used_starters': {'used_starters' in dir(self)}")
+        # --- END DEBUG PRINT ---
+
+
+        # Calculate total team points
+        self.total_points = sum(b.pts for b in self.batters) + sum(b.pts for b in self.bench) + sum(p.pts for p in self.all_pitchers)
+
+
+    def get_next_batter(self):
+        """
+        Gets the next batter in the lineup and updates the index.
+
+        Returns:
+            Batter: The next Batter object.
+        """
+        batter = self.batters[self.current_batter_index]
+        self.current_batter_index = (self.current_batter_index + 1) % len(self.batters)
+        return batter
+
+    def get_available_reliever(self):
+        """
+        Gets the next available reliever who hasn't pitched yet.
+
+        Returns:
+            Pitcher or None: An available reliever, or None if none are available.
+        """
+        for reliever in self.relievers:
+            if reliever not in self.used_relievers:
+                return reliever
+        return None # No available relievers
+
+    def get_available_closer(self):
+        """
+        Gets the closer if available and not used yet.
+
+        Returns:
+            Pitcher or None: The closer if available and not used, or None otherwise.
+        """
+        # Assuming only one closer for simplicity
+        if self.closers and self.closers[0] not in self.used_closers:
+            return self.closers[0]
+        return None # Closer not available or already used
+
+    def get_available_reliever_or_closer_pool(self):
+        """
+        Creates a pool of available relievers and closers.
+
+        Returns:
+            list: A list of available Pitcher objects (RP or CL).
+        """
+        available_pool = []
+        for reliever in self.relievers:
+            if reliever not in self.used_relievers:
+                available_pool.append(reliever)
+        # Assuming only one closer, add if not used
+        if self.closers and self.closers[0] not in self.used_closers:
+             available_pool.append(self.closers[0])
+
+        return available_pool

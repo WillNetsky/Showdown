@@ -17,8 +17,9 @@ import re # Import regex module
 import json # Import json module
 
 # Import necessary classes and constants
-from entities import Batter, Pitcher # Import Batter and Pitcher classes
-from team import Team # Import Team class
+# --- CORRECTED: Import Team from entities ---
+from entities import Batter, Pitcher, Team # Import Batter, Pitcher, and Team classes
+# --- END CORRECTED ---
 from constants import POSITION_MAPPING, STARTING_POSITIONS, MIN_TEAM_POINTS, MAX_TEAM_POINTS
 
 def load_players_from_json(filepath):

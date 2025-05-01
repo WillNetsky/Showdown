@@ -29,8 +29,4 @@ STARTING_POSITIONS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH']
 
 # Default minimum and maximum total points for team creation
 MIN_TEAM_POINTS = 4500
-MAX_TEAM_POINTS = 5000
-
-# Placeholder for potential hit result mappings (currently handled by player ranges)
-# pitcher_hit_results = { ... }
-# batter_hit_results = { ... }
+MAX_TEAM_POINTS = 5500 # Increased max points to make team creation easier

@@ -1,138 +1,121 @@
 # team.py
-# Defines the Team class to manage a team's roster and pitcher usage.
+# The Team class has been moved to entities.py to consolidate entity definitions.
+# This file is now empty or serves as a placeholder.
 
-from entities import Batter, Pitcher # Import Batter and Pitcher classes
-
-class Team:
-    def __init__(self, name, batters, starters, relievers, closers, bench):
-        """
-        Initializes a Team object with specific pitcher roles and a bench.
-
-        Args:
-            name (str): The name of the team.
-            batters (list): A list of Batter objects for the starting lineup (9 players).
-            starters (list): A list of Pitcher objects who are starters.
-            relievers (list): A list of Pitcher objects who are relievers.
-            closers (list): A list of Pitcher objects who are closers.
-            bench (list): A list of Batter objects for the bench.
-        """
-        self.name = name
-        self.batters = batters # This is now explicitly the starting lineup
-        self.starters = starters
-        self.relievers = relievers
-        self.closers = closers
-        self.bench = bench # Added bench attribute
-        # Combine all pitchers into one list for easier iteration if needed
-        self.all_pitchers = starters + relievers + closers
-        # Set the initial current pitcher - prefer SP, then RP, then CL
-        self.current_pitcher = None
-        if self.starters:
-            self.current_pitcher = self.starters[0]
-        elif self.relievers:
-            self.current_pitcher = self.relievers[0]
-        elif self.closers:
-            self.current_pitcher = self.closers[0]
+# If you previously had a Team class defined here, remove it.
+# The Team class is now imported from entities.py in main.py and team_management.py.
 
 
-        self.current_batter_index = 0 # Index of the next batter in the lineup
 
-        # Keep track of which relievers/closers have already pitched
-        # Note: Starters are not added to used_relievers/used_closers by handle_pitching_change,
-        # but they are added to used_starters in play_game.
-        self.used_relievers = []
-        self.used_closers = []
-        # Track used starters separately to manage their IP limits across innings
-        self.used_starters = []
-
-
-        # Calculate total team points
-        self.total_points = sum(b.pts for b in self.batters) + sum(b.pts for b in self.bench) + sum(p.pts for p in self.all_pitchers)
-
-
-    def get_next_batter(self):
-        """
-        Gets the next batter in the lineup and updates the index.
-
-        Returns:
-            Batter: The next Batter object.
-        """
-        batter = self.batters[self.current_batter_index]
-        self.current_batter_index = (self.current_batter_index + 1) % len(self.batters)
-        return batter
-
-    def get_available_reliever(self):
-        """
-        Gets the next available reliever who hasn't pitched yet and is within their IP limit.
-
-        Returns:
-            Pitcher or None: An available reliever, or None if none are available or within limit.
-        """
-        for reliever in self.relievers:
-            # Check if the reliever hasn't been used yet and is within their IP limit
-            # --- CORRECTED: Use pitcher.ip_limit and pitcher.outs_recorded ---
-            if reliever not in self.used_relievers and (reliever.ip_limit is None or reliever.outs_recorded < reliever.ip_limit):
-            # --- END CORRECTED ---
-                return reliever
-        return None # No available relievers
-
-    def get_available_closer(self):
-        """
-        Gets the closer if available, not used yet, and within their IP limit.
-
-        Returns:
-            Pitcher or None: The closer if available, not used, and within limit, or None otherwise.
-        """
-        # Assuming only one closer for simplicity
-        # --- CORRECTED: Use pitcher.ip_limit and pitcher.outs_recorded ---
-        if self.closers and self.closers[0] not in self.used_closers and (self.closers[0].ip_limit is None or self.closers[0].outs_recorded < self.closers[0].ip_limit):
-        # --- END CORRECTED ---
-            return self.closers[0]
-        return None # Closer not available, already used, or over limit
-
-    def get_available_reliever_or_closer_pool(self):
-        """
-        Creates a pool of available relievers and closers who are within their IP limits.
-
-        Returns:
-            list: A list of available Pitcher objects (RP or CL).
-        """
-        available_pool = []
-        for reliever in self.relievers:
-            # --- CORRECTED: Use pitcher.ip_limit and pitcher.outs_recorded ---
-            if reliever not in self.used_relievers and (reliever.ip_limit is None or reliever.outs_recorded < reliever.ip_limit):
-            # --- END CORRECTED ---
-                available_pool.append(reliever)
-
-        # Assuming only one closer, add if not used and within limit
-        # --- CORRECTED: Use pitcher.ip_limit and pitcher.outs_recorded ---
-        if self.closers and self.closers[0] not in self.used_closers and (self.closers[0].ip_limit is None or self.closers[0].outs_recorded < self.closers[0].ip_limit):
-        # --- END CORRECTED ---
-             available_pool.append(self.closers[0])
-
-        return available_pool
-
-    def __str__(self):
-        """
-        Returns a string representation of the Team object.
-        """
-        batter_names = ", ".join([b.name for b in self.batters])
-        bench_names = ", ".join([b.name for b in self.bench]) if self.bench else "None"
-        sp_names = ", ".join([p.name for p in self.starters]) if self.starters else "None"
-        rp_names = ", ".join([p.name for p in self.relievers]) if self.relievers else "None"
-        cl_names = ", ".join([p.name for p in self.closers]) if self.closers else "None"
-
-        return (f"Team Name: {self.name}\n"
-                f"Total Points: {self.total_points}\n"
-                f"Starting Lineup ({len(self.batters)}): {batter_names}\n"
-                f"Bench ({len(self.bench)}): {bench_names}\n"
-                f"Starting Pitchers ({len(self.starters)}): {sp_names}\n"
-                f"Relief Pitchers ({len(self.relievers)}): {rp_names}\n"
-                f"Closers ({len(self.closers)}): {cl_names}")
-
-    def __repr__(self):
-        """
-        Returns a developer-friendly string representation of the Team object.
-        """
-        return (f"Team(name='{self.name}', batters={repr(self.batters)}, "
-                f"starters={repr(self.starters)}, relievers={repr(self.relievers)}, "
-                f"closers={repr(self.closers)}, bench={repr(self.bench)})")
+# # team.py
+# # Contains the Team class to manage a team's roster and current state.
+#
+# import random
+#
+# class Team:
+#     def __init__(self, name, batters, starters, relievers, closers, bench):
+#         """
+#         Initializes a Team object.
+#
+#         Args:
+#             name (str): The name of the team.
+#             batters (list): A list of Batter objects for the starting lineup (should be 9).
+#             starters (list): A list of Pitcher objects for starting pitchers (should be 4).
+#             relievers (list): A list of Pitcher objects for relief pitchers (should be 5). # Adjusted count based on typical roster
+#             closers (list): A list of Pitcher objects for closers (should be 1). # Adjusted count based on typical roster
+#             bench (list): A list of Batter objects for the bench (should be 1).
+#         """
+#         self.name = name
+#         self.batters = batters # Starting lineup (9 players)
+#         self.starters = starters # Starting pitchers (4 players)
+#         self.relievers = relievers # Relief pitchers (5 players)
+#         self.closers = closers # Closer pitchers (1 player)
+#         self.bench = bench # Bench players (1 player)
+#
+#         # Combine all pitchers into one list for easier rotation
+#         self.all_pitchers = self.starters + self.relievers + self.closers
+#
+#         # Ensure the total number of pitchers is 10 (4 SP + 5 RP + 1 CL)
+#         if len(self.all_pitchers) != 10:
+#             print(f"Warning: Team '{self.name}' initialized with {len(self.all_pitchers)} pitchers instead of 10.")
+#
+#         # Ensure the total number of batters is 10 (9 starters + 1 bench)
+#         if len(self.batters) + len(self.bench) != 10:
+#              print(f"Warning: Team '{self.name}' initialized with {len(self.batters) + len(self.bench)} batters instead of 10.")
+#
+#
+#         # Initialize current batter and pitcher indices/pointers
+#         self.current_batter_index = 0
+#         self.current_pitcher_index = 0
+#         self.current_pitcher = None # Attribute to hold the current active pitcher object
+#
+#         # Calculate initial total points
+#         self.total_points = sum(p.pts for p in self.batters + self.bench + self.all_pitchers)
+#
+#
+#     def get_next_batter(self):
+#         """
+#         Gets the next batter in the lineup. Cycles back to the top after the last batter.
+#
+#         Returns:
+#             Batter: The next Batter object.
+#         """
+#         batter = self.batters[self.current_batter_index]
+#         self.current_batter_index = (self.current_batter_index + 1) % len(self.batters)
+#         return batter
+#
+#     def rotate_pitcher(self):
+#         """
+#         Rotates to the next available pitcher in the roster.
+#         Cycles through starters, then relievers, then closers.
+#         Sets the self.current_pitcher attribute.
+#         Returns the newly selected pitcher, or None if no pitchers are available.
+#         """
+#         # Find the next pitcher who has not exceeded their IP limit
+#         # Start checking from the pitcher *after* the current one
+#         start_index = (self.current_pitcher_index + 1) % len(self.all_pitchers)
+#         num_pitchers = len(self.all_pitchers)
+#
+#         for i in range(num_pitchers):
+#             # Calculate the index to check, cycling through the list
+#             pitcher_to_check_index = (start_index + i) % num_pitchers
+#             next_pitcher = self.all_pitchers[pitcher_to_check_index]
+#
+#             # Check if the pitcher is available (hasn't exceeded IP limit)
+#             # A pitcher is available if their outs_recorded is strictly LESS THAN their ip_limit_outs
+#             # For ip_limit_outs = 0, they are only available if outs_recorded is also 0.
+#             is_available = False
+#             if next_pitcher.ip_limit_outs is None:
+#                 is_available = True # No IP limit, always available
+#             elif next_pitcher.ip_limit_outs == 0:
+#                  if next_pitcher.outs_recorded == 0:
+#                       is_available = True # 0 IP limit, available only if 0 outs recorded
+#             elif next_pitcher.ip_limit_outs > 0:
+#                  if next_pitcher.outs_recorded < next_pitcher.ip_limit_outs:
+#                       is_available = True # Positive IP limit, available if outs recorded is less than limit
+#
+#
+#             if is_available:
+#                 self.current_pitcher = next_pitcher
+#                 self.current_pitcher_index = pitcher_to_check_index # Update the index
+#                 return self.current_pitcher # Return the newly selected pitcher
+#
+#         # If no available pitcher is found after checking all pitchers
+#         self.current_pitcher = None
+#         print(f"Warning: Team '{self.name}' has no available pitchers left!")
+#         return None
+#
+#
+#     def __str__(self):
+#         """
+#         Returns a string representation of the Team object.
+#         """
+#         return f"Team: {self.name} ({self.total_points} pts)"
+#
+#     def __repr__(self):
+#         """
+#         Returns a developer-friendly string representation of the Team object.
+#         """
+#         return (f"Team(name='{self.name}', batters={self.batters}, starters={self.starters}, "
+#                 f"relievers={self.relievers}, closers={self.closers}, bench={self.bench})")
+#
