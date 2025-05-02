@@ -1,25 +1,23 @@
 # team_management.py
 # Contains functions for loading players from data and creating teams,
-# and saving/loading specific teams with sequential numbering.
+# and saving/loading specific teams using JSON format.
 # Updated to load base player data from a single JSON file and improved team creation.
-# Debugging prints restored for the team creation process.
 # Fixed SyntaxError in pitcher loading.
 # Corrected roster size validation logic.
 # Added handling for both 'ip' and 'ip limit (outs)' keys for pitcher IP.
 # Added setting of 'team_role' attribute on player objects.
 # Added setting of specific defensive 'position' for starting batters.
+# --- MODIFIED: Changed save/load format to JSON ---
 
 import random
-import csv
+# Removed csv import as it's no longer used for team save/load
 import os
 import glob
 import re # Import regex module
 import json # Import json module
 
 # Import necessary classes and constants
-# --- CORRECTED: Import Team from entities ---
 from entities import Batter, Pitcher, Team # Import Batter, Pitcher, and Team classes
-# --- END CORRECTED ---
 from constants import POSITION_MAPPING, STARTING_POSITIONS, MIN_TEAM_POINTS, MAX_TEAM_POINTS
 
 def load_players_from_json(filepath):
@@ -127,11 +125,10 @@ def load_players_from_json(filepath):
                 gb_str = player_data.get('gb', '0').strip() # Pitchers also have GB
                 fb_str = player_data.get('fb', '0').strip() # Pitchers also have FB
                 bb_str = player_data.get('bb', '0').strip() # Pitchers also have BB
-                # --- CORRECTED: Fixed the syntax error in the get() call ---
-                b1_str = player_data.get('1b', '0').strip() # Pitchers also have B1 allowed
-                b2_str = player_data.get('2b', '0').strip() # Pitchers also have B2 allowed
+                b1_str = player_data.get('b1', '0').strip() #
+                b2_str = player_data.get('b2', '0').strip() #
                 hr_str = player_data.get('hr', '0').strip() # Pitchers also have HR allowed
-                # --- END CORRECTED ---
+
 
                 # --- Handle both 'ip limit (outs)' and 'ip' for IP limit ---
                 ip_limit_outs = None
@@ -200,16 +197,19 @@ def load_players_from_json(filepath):
 def get_next_team_number(teams_dir):
     """
     Finds the next available sequential team number based on existing team files.
+    Looks for .json files.
 
     Args:
-        teams_dir (str): The directory containing saved team CSV files.
+        teams_dir (str): The directory containing saved team JSON files.
 
     Returns:
         int: The next available team number (starting from 1 if no files exist).
     """
     max_number = 0
-    # Pattern to match filenames like "Team_X_*.csv" and capture the number X
-    pattern = re.compile(r'Team_(\d+)_.*\.csv', re.IGNORECASE)
+    # Pattern to match filenames like "Team_X_*.json" and capture the number X
+    # --- MODIFIED: Look for .json files ---
+    pattern = re.compile(r'Team_(\d+)_.*\.json', re.IGNORECASE)
+    # --- END MODIFIED ---
 
     for filename in os.listdir(teams_dir):
         match = pattern.match(filename)
@@ -230,7 +230,7 @@ def create_random_team(all_players, team_name, min_points, max_points, max_attem
     Creates a random team from the list of all players, adhering to roster requirements
     and total points limits.
     Includes enhanced debugging for position eligibility and pitcher selection.
-    Sets the 'team_role' attribute and the specific defensive 'position' for starters.
+    Sets the 'team_role' attribute and the specific defensive 'position' for starting batters.
 
     Args:
         all_players (list): A list of all available Batter and Pitcher objects.
@@ -250,7 +250,7 @@ def create_random_team(all_players, team_name, min_points, max_points, max_attem
          return None
 
     for attempt in range(max_attempts):
-        print(f"\nAttempt {attempt + 1} for team {team_name}...") # Debug print restored
+        #print(f"\nAttempt {attempt + 1} for team {team_name}...") # Debug print restored
         # Shuffle players for randomness in each attempt
         random.shuffle(available_batters)
         random.shuffle(available_pitchers)
@@ -270,7 +270,7 @@ def create_random_team(all_players, team_name, min_points, max_points, max_attem
 
         # Dictionary to store eligible players for each position
         eligible_players_by_position = {}
-        print("Finding eligible players for each starting position:") # Debug print restored
+        #print("Finding eligible players for each starting position:") # Debug print restored
         for pos in lineup_positions_to_fill:
              eligible_players_by_position[pos] = []
              for player in temp_batters:
@@ -279,19 +279,15 @@ def create_random_team(all_players, team_name, min_points, max_points, max_attem
                   if player_id not in selected_players_set and player.can_play(pos):
                        eligible_players_by_position[pos].append(player)
 
-             print(f"  {pos}: {len(eligible_players_by_position[pos])} eligible players") # Debug print restored
-             # Print names and raw positions of eligible players for Catcher
-             if pos == 'C':
-                  print(f"    Eligible Catchers (Name, Raw Positions): {[(p.name, p.position, p.pos1, p.pos2, p.pos3, p.pos4) for p in eligible_players_by_position[pos]]}") # Debug print restored
-
+             #print(f"  {pos}: {len(eligible_players_by_position[pos])} eligible players") # Debug print restored
 
         # Sort positions by the number of eligible players (least first)
         sorted_positions = sorted(lineup_positions_to_fill, key=lambda pos: len(eligible_players_by_position[pos]))
-        print(f"Positions sorted by scarcity: {[pos for pos in sorted_positions]}") # Debug print restored
+        #print(f"Positions sorted by scarcity: {[pos for pos in sorted_positions]}") # Debug print restored
 
 
         found_all_starters = True
-        print("Selecting starters for sorted positions:") # Debug print restored
+        #print("Selecting starters for sorted positions:") # Debug print restored
         for pos in sorted_positions:
             # Find an available player for this position
             found_player = None
@@ -303,7 +299,7 @@ def create_random_team(all_players, team_name, min_points, max_points, max_attem
                 player for player in eligible_players_by_position[pos]
                 if (player.name, player.year, player.set) not in selected_players_set
             ]
-            print(f"  Considering {len(current_eligible_players)} players for {pos}") # Debug print restored
+            #print(f"  Considering {len(current_eligible_players)} players for {pos}") # Debug print restored
 
 
             for player in current_eligible_players:
@@ -317,7 +313,7 @@ def create_random_team(all_players, team_name, min_points, max_points, max_attem
                       player.position = pos
                       # --- End set team_role and position ---
                       found_player = player
-                      print(f"    Selected {player.name} ({player.position}) for {pos}") # Debug print restored
+                      #print(f"    Selected {player.name} ({player.position}) for {pos}") # Debug print restored
                       break # Found a player for this position, move to the next sorted position
 
             if found_player is None:
@@ -334,7 +330,7 @@ def create_random_team(all_players, team_name, min_points, max_points, max_attem
              print(f"Attempt {attempt+1}: Failed to select a complete starting lineup ({len(selected_starters)}/{len(STARTING_POSITIONS)} selected).") # Debug print restored
              continue # Try the next attempt
 
-        print(f"Successfully selected {len(selected_starters)} starting batters.") # Debug print restored
+        #print(f"Successfully selected {len(selected_starters)} starting batters.") # Debug print restored
 
 
         # Select Bench player (1 batter) from remaining batters
@@ -350,7 +346,7 @@ def create_random_team(all_players, team_name, min_points, max_points, max_attem
              # --- Set team_role for bench player ---
              bench_player.team_role = 'Bench'
              # --- End set team_role ---
-             print(f"Selected bench player: {bench_player.name} ({bench_player.position})") # Debug print restored
+             #print(f"Selected bench player: {bench_player.name} ({bench_player.position})") # Debug print restored
         else:
              # If no batters left for the bench, this attempt is invalid
              print(f"Attempt {attempt+1}: Not enough batters left for bench. Failing attempt.") # Debug print restored
@@ -360,10 +356,10 @@ def create_random_team(all_players, team_name, min_points, max_points, max_attem
         temp_pitchers = list(available_pitchers) # Work with a copy
         random.shuffle(temp_pitchers) # Shuffle pitchers before selecting
 
-        print("Selecting pitchers (4 SP, 6 RP/CL)...") # Debug print restored
+        #print("Selecting pitchers (4 SP, 6 RP/CL)...") # Debug print restored
         # Select Starters (4 SP)
         sp_count = 0
-        print("  Considering pitchers for SP role:") # Debug print restored
+        #print("  Considering pitchers for SP role:") # Debug print restored
         # Iterate through a copy to allow removal
         for pitcher in list(temp_pitchers):
              player_id = (pitcher.name, pitcher.year, pitcher.set)
@@ -389,18 +385,18 @@ def create_random_team(all_players, team_name, min_points, max_points, max_attem
              print(f"Attempt {attempt+1}: Not enough starting pitchers selected ({len(selected_sps)}/4). Failing attempt.") # Debug print restored
              continue # Try the next attempt
 
-        print(f"Successfully selected {len(selected_sps)} starting pitchers.") # Debug print restored
+        #print(f"Successfully selected {len(selected_sps)} starting pitchers.") # Debug print restored
 
         # Select Relievers/Closers (6 RP/CL) from remaining pitchers
         rp_cl_count = 0
-        print("  Considering pitchers for RP/CL roles:") # Debug print restored
+        #print("  Considering pitchers for RP/CL roles:") # Debug print restored
         # Iterate through a copy to allow removal
         for pitcher in list(temp_pitchers):
              player_id = (pitcher.name, pitcher.year, pitcher.set)
              # --- Check for 'Reliever', 'Closer', 'RP', 'CL', or 'P' positions ---
              # Added debug print to show pitcher's position and if it matches RP/CL criteria
              is_rp_cl_candidate = pitcher.position in ['Reliever', 'Closer', 'RP', 'CL', 'P']
-             # print(f"    Pitcher: {pitcher.name}, Raw Position: '{pitcher.position}', Is RP/CL Candidate: {is_rp_cl_candidate}, Already Selected: {(player_id in selected_players_set)}") # Debug print restored
+             # print(f"    Pitcher: {pitcher.name}, Raw Position: '{pitcher.position}', Is RP/CL Candidate: {is_rp_cl_candidate}, Already Selected: {(player_id in selected_players_set)}") # Debug print removed
 
              if player_id not in selected_players_set and is_rp_cl_candidate:
                   # Simple logic: try to get 1 closer if available, then fill with RP/P
@@ -434,7 +430,7 @@ def create_random_team(all_players, team_name, min_points, max_points, max_attem
              print(f"Attempt {attempt+1}: Not enough relievers/closers selected ({len(selected_rps) + len(selected_cls)}/6). Failing attempt.") # Debug print restored
              continue # Try the next attempt
 
-        print(f"Successfully selected {len(selected_rps) + len(selected_cls)} relievers/closers.") # Debug print restored
+        #print(f"Successfully selected {len(selected_rps) + len(selected_cls)} relievers/closers.") # Debug print restored
 
 
         # Final check on roster sizes
@@ -455,61 +451,158 @@ def create_random_team(all_players, team_name, min_points, max_points, max_attem
              # This else block is for the case where the roster size check fails
              print(f"Attempt {attempt+1}: Roster size mismatch.") # Debug print restored
              print(f"Expected: 9 Starters, 1 Bench, 4 SP, 6 RP/CL. Found: {len(selected_starters)} Starters, {len(selected_bench)} Bench, {len(selected_sps)} SP, {len(selected_rps) + len(selected_cls)} RP/CL.") # Debug print restored
-             continue # Roster size incorrect, try again
+             continue
 
 
     print(f"Failed to create a valid team within the point range and roster requirements after {max_attempts} attempts.") # Debug print restored
     return None # Failed to create a team after max attempts
 
-def save_team_to_csv(team: Team, filepath: str):
+def save_team_to_json(team: Team, filepath: str):
     """
-    Saves a Team object's roster and player data to a CSV file.
+    Saves a Team object's roster and player data to a JSON file.
 
     Args:
         team (Team): The Team object to save.
-        filepath (str): The path to the CSV file to save to.
+        filepath (str): The path to the JSON file to save to.
     """
     try:
-        with open(filepath, mode='w', newline='', encoding='utf-8') as outfile:
-            writer = csv.writer(outfile)
+        team_data = {
+            "name": team.name,
+            "total_points": team.total_points,
+            "batters": [],
+            "starters": [],
+            "relievers": [],
+            "closers": [],
+            "bench": []
+        }
 
-            # Write header row - include role (Starter, Reliever, Closer, Bench)
-            writer.writerow(['Role', 'Name', 'Position', 'OnBase', 'SO', 'GB', 'FB', 'BB', '1B', '1BP', '2B', '3B', 'HR', 'Control', 'PU', 'IP Limit (Outs)', 'Pts', 'Year', 'Set'])
+        # Serialize batters (Starters and Bench)
+        for batter in team.batters: # Starters
+            team_data["batters"].append({
+                "type": "batter",
+                "role": "Starter",
+                "name": batter.name,
+                "position": batter.position, # Save the assigned defensive position
+                "onbase": batter.on_base,
+                "so": batter.so,
+                "gb": batter.gb,
+                "fb": batter.fb,
+                "bb": batter.bb,
+                "b1": batter.b1,
+                "b1p": batter.b1p,
+                "b2": batter.b2,
+                "b3": batter.b3,
+                "hr": batter.hr,
+                "pts": batter.pts,
+                "year": batter.year,
+                "set": batter.set,
+                # Include additional positions if they exist on the original player object
+                "pos1": getattr(batter, 'pos1', ''),
+                "fld1": getattr(batter, 'fld1', ''),
+                "pos2": getattr(batter, 'pos2', ''),
+                "fld2": getattr(batter, 'fld2', ''),
+                "pos3": getattr(batter, 'pos3', ''),
+                "fld3": getattr(batter, 'fld3', ''),
+                "pos4": getattr(batter, 'pos4', ''),
+                "fld4": getattr(batter, 'fld4', ''),
+            })
+        for batter in team.bench: # Bench
+             team_data["bench"].append({
+                "type": "batter",
+                "role": "Bench",
+                "name": batter.name,
+                "position": batter.position, # Save the raw position for bench
+                "onbase": batter.on_base,
+                "so": batter.so,
+                "gb": batter.gb,
+                "fb": batter.fb,
+                "bb": batter.bb,
+                "b1": batter.b1,
+                "b1p": batter.b1p,
+                "b2": batter.b2,
+                "b3": batter.b3,
+                "hr": batter.hr,
+                "pts": batter.pts,
+                "year": batter.year,
+                "set": batter.set,
+                 # Include additional positions if they exist on the original player object
+                "pos1": getattr(batter, 'pos1', ''),
+                "fld1": getattr(batter, 'fld1', ''),
+                "pos2": getattr(batter, 'pos2', ''),
+                "fld2": getattr(batter, 'fld2', ''),
+                "pos3": getattr(batter, 'pos3', ''),
+                "fld3": getattr(batter, 'fld3', ''),
+                "pos4": getattr(batter, 'pos4', ''),
+                "fld4": getattr(batter, 'fld4', ''),
+            })
 
-            # Write batters (Starters and Bench)
-            for batter in team.batters:
-                # --- CORRECTED: Write the player's current position (assigned defensive position) ---
-                writer.writerow([
-                    'Starter', batter.name, batter.position, batter.on_base, batter.so,
-                    batter.gb, batter.fb, batter.bb, batter.b1, batter.b1p, batter.b2,
-                    batter.b3, batter.hr, '', '', '', batter.pts, batter.year, batter.set # Empty fields for pitcher stats
-                ])
-                # --- END CORRECTED ---
-            for batter in team.bench:
-                 writer.writerow([
-                    'Bench', batter.name, batter.position, batter.on_base, batter.so,
-                    batter.gb, batter.fb, batter.bb, batter.b1, batter.b1p, batter.b2,
-                    batter.b3, batter.hr, '', '', '', batter.pts, batter.year, batter.set # Empty fields for pitcher stats
-                ])
+
+        # Serialize pitchers (Starters, Relievers, Closers)
+        for pitcher in team.starters: # SP
+            team_data["starters"].append({
+                "type": "pitcher",
+                "role": "SP",
+                "name": pitcher.name,
+                "position": pitcher.position, # Save the raw position
+                "control": pitcher.control,
+                "pu": pitcher.pu,
+                "so": pitcher.so,
+                "gb": pitcher.gb,
+                "fb": pitcher.fb,
+                "bb": pitcher.bb,
+                "1b": pitcher.b1, # Use '1b' key to match load_players_from_json
+                "2b": pitcher.b2, # Use '2b' key to match load_players_from_json
+                "hr": pitcher.hr,
+                "ip_limit_outs": pitcher.ip_limit, # Save IP limit as outs
+                "pts": pitcher.pts,
+                "year": pitcher.year,
+                "set": pitcher.set,
+            })
+        for pitcher in team.relievers: # RP
+             team_data["relievers"].append({
+                "type": "pitcher",
+                "role": "RP",
+                "name": pitcher.name,
+                "position": pitcher.position, # Save the raw position
+                "control": pitcher.control,
+                "pu": pitcher.pu,
+                "so": pitcher.so,
+                "gb": pitcher.gb,
+                "fb": pitcher.fb,
+                "bb": pitcher.bb,
+                "1b": pitcher.b1, # Use '1b' key to match load_players_from_json
+                "2b": pitcher.b2, # Use '2b' key to match load_players_from_json
+                "hr": pitcher.hr,
+                "ip_limit_outs": pitcher.ip_limit, # Save IP limit as outs
+                "pts": pitcher.pts,
+                "year": pitcher.year,
+                "set": pitcher.set,
+            })
+        for pitcher in team.closers: # CL
+             team_data["closers"].append({
+                "type": "pitcher",
+                "role": "CL",
+                "name": pitcher.name,
+                "position": pitcher.position, # Save the raw position
+                "control": pitcher.control,
+                "pu": pitcher.pu,
+                "so": pitcher.so,
+                "gb": pitcher.gb,
+                "fb": pitcher.fb,
+                "bb": pitcher.bb,
+                "1b": pitcher.b1, # Use '1b' key to match load_players_from_json
+                "2b": pitcher.b2, # Use '2b' key to match load_players_from_json
+                "hr": pitcher.hr,
+                "ip_limit_outs": pitcher.ip_limit, # Save IP limit as outs
+                "pts": pitcher.pts,
+                "year": pitcher.year,
+                "set": pitcher.set,
+            })
 
 
-            # Write pitchers (Starters, Relievers, Closers)
-            for pitcher in team.starters:
-                writer.writerow([
-                    'SP', pitcher.name, pitcher.position, '', '', '', '', '', '', '', '', '', '',
-                    pitcher.control, pitcher.pu, pitcher.ip_limit, pitcher.pts, pitcher.year, pitcher.set # Empty fields for batter stats
-                ])
-            for pitcher in team.relievers:
-                 writer.writerow([
-                    'RP', pitcher.name, pitcher.position, '', '', '', '', '', '', '', '', '', '',
-                    pitcher.control, pitcher.pu, pitcher.ip_limit, pitcher.pts, pitcher.year, pitcher.set # Empty fields for batter stats
-                ])
-            for pitcher in team.closers:
-                 writer.writerow([
-                    'CL', pitcher.name, pitcher.position, '', '', '', '', '', '', '', '', '', '',
-                    pitcher.control, pitcher.pu, pitcher.ip_limit, pitcher.pts, pitcher.year, pitcher.set # Empty fields for batter stats
-                ])
-
+        # Write the data to a JSON file
+        with open(filepath, mode='w', encoding='utf-8') as outfile:
+            json.dump(team_data, outfile, indent=4) # Use indent for readability
 
         print(f"Team '{team.name}' saved to {filepath}")
 
@@ -517,214 +610,141 @@ def save_team_to_csv(team: Team, filepath: str):
         print(f"Error saving team '{team.name}' to {filepath}: {e}")
 
 
-def load_team_from_csv(filepath: str):
+def load_team_from_json(filepath: str):
     """
-    Loads a Team object from a CSV file saved by save_team_to_csv.
+    Loads a Team object from a JSON file saved by save_team_to_json.
     Sets the 'team_role' attribute and the specific defensive 'position' for starters.
 
     Args:
-        filepath (str): The path to the team CSV file.
+        filepath (str): The path to the team JSON file.
 
     Returns:
         Team or None: The loaded Team object, or None if loading fails.
     """
     name = os.path.splitext(os.path.basename(filepath))[0] # Use filename as team name initially
-    batters = []
-    starters = []
-    relievers = []
-    closers = []
-    bench = []
-    total_points = 0 # Will calculate total points from loaded players
+    batters = [] # Starters will go here
+    starters_pitchers = [] # SPs will go here
+    relievers = [] # RPs will go here
+    closers = [] # CLs will go here
+    bench = [] # Bench batters will go here
 
     try:
         with open(filepath, mode='r', encoding='utf-8') as infile:
-            reader = csv.DictReader(infile)
+            team_data = json.load(infile)
 
-            # Create a mapping from lowercase CSV headers to original headers
-            header_map = {header.strip().lower(): header.strip() for header in reader.fieldnames} if reader.fieldnames else {}
+        team_name_from_file = team_data.get("name", name) # Get name from data, fallback to filename
+        loaded_total_points = team_data.get("total_points") # Get total points from data
 
+        # Load batters (Starters and Bench)
+        for batter_data in team_data.get("batters", []):
+            try:
+                role = batter_data.get("role")
+                player_name = batter_data.get("name")
+                position = batter_data.get("position") # Load the saved position
+                onbase = batter_data.get("onbase")
+                so = batter_data.get("so")
+                gb = batter_data.get("gb")
+                fb = batter_data.get("fb")
+                bb = batter_data.get("bb")
+                b1 = batter_data.get("b1")
+                b1p = batter_data.get("b1p")
+                b2 = batter_data.get("b2")
+                b3 = batter_data.get("b3")
+                hr = batter_data.get("hr")
+                pts = batter_data.get("pts")
+                year = batter_data.get("year")
+                set_name = batter_data.get("set")
 
-            for row in reader:
-                try:
-                    role = row.get(header_map.get('role', 'Role'), '').strip()
-                    player_name = row.get(header_map.get('name', 'Name'), '').strip()
-                    # --- CORRECTED: Read the position from the CSV ---
-                    position = row.get(header_map.get('position', 'Position'), '').strip()
-                    # --- END CORRECTED ---
-                    pts_str = row.get(header_map.get('pts', 'Pts'), '0').strip()
-                    year = row.get(header_map.get('year', 'Year'), '').strip()
-                    set_name = row.get(header_map.get('set', 'Set'), '').strip()
-
-
-                    if not player_name or not role:
-                        print(f"Skipping row with missing Name or Role in {filepath}: {row}")
-                        continue
-
-                    try:
-                        pts = int(pts_str)
-                    except ValueError:
-                        print(f"Skipping row with invalid Points for {player_name} in {filepath}: {row}")
-                        continue
-
-                    if role in ['Starter', 'Bench']:
-                        # Load as Batter
-                        # --- Only attempt to read batter-specific fields ---
-                        onbase_str = row.get(header_map.get('onbase', 'OnBase'), '0').strip()
-                        so_str = row.get(header_map.get('so', 'SO'), '0').strip()
-                        gb_str = row.get(header_map.get('gb', 'GB'), '0').strip()
-                        fb_str = row.get(header_map.get('fb', 'FB'), '0').strip()
-                        bb_str = row.get(header_map.get('bb', 'BB'), '0').strip()
-                        b1_str = row.get(header_map.get('1b', '1B'), '0').strip()
-                        b1p_str = row.get(header_map.get('1bp', '1BP'), '0').strip()
-                        b2_str = row.get(header_map.get('2b', '2B'), '0').strip()
-                        b3_str = row.get(header_map.get('3b', '3B'), '0').strip()
-                        hr_str = row.get(header_map.get('hr', 'HR'), '0').strip()
-
-                        try:
-                            onbase = int(onbase_str)
-                            so = int(so_str)
-                            gb = int(gb_str)
-                            fb = int(fb_str)
-                            bb = int(bb_str)
-                            b1 = int(b1_str)
-                            b1p = int(b1p_str)
-                            b2 = int(b2_str)
-                            b3 = int(b3_str)
-                            hr = int(hr_str)
-                        except ValueError:
-                             print(f"Skipping batter row with invalid numeric data for {player_name} in {filepath}: {row}")
-                             continue
-
-                        # --- Pass the position read from CSV to Batter constructor ---
-                        batter = Batter(player_name, position, onbase, so, gb, fb, bb, b1, b1p, b2, b3, hr, pts, year, set_name)
-                        # --- End corrected ---
-                        # --- Set team_role for loaded batters ---
-                        batter.team_role = role
-                        # --- End set team_role ---
-                        if role == 'Starter':
-                            # Ensure we don't add more than 9 starters
-                            if len(batters) < 9:
-                                batters.append(batter)
-                            else:
-                                print(f"Warning: Too many starters in file {filepath}. Skipping {player_name}.")
-                        elif role == 'Bench':
-                             # Ensure we don't add more than 1 bench player
-                            if len(bench) < 1:
-                                bench.append(batter)
-                            else:
-                                print(f"Warning: Too many bench players in file {filepath}. Skipping {player_name}.")
+                 # Include additional positions if they exist in the JSON data
+                pos1 = batter_data.get('pos1', '')
+                fld1 = batter_data.get('fld1', '')
+                pos2 = batter_data.get('pos2', '')
+                fld2 = batter_data.get('fld2', '')
+                pos3 = batter_data.get('pos3', '')
+                fld3 = batter_data.get('fld3', '')
+                pos4 = batter_data.get('pos4', '')
+                fld4 = batter_data.get('fld4', '')
 
 
-                    elif role in ['SP', 'RP', 'CL']:
-                        # Load as Pitcher
-                        # --- Only attempt to read pitcher-specific fields ---
-                        control_str = row.get(header_map.get('control', 'Control'), '0').strip()
-                        pu_str = row.get(header_map.get('pu', 'PU'), '0').strip()
-                        so_str = row.get(header_map.get('so', 'SO'), '0').strip() # Pitchers also have SO
-                        gb_str = row.get(header_map.get('gb', 'GB'), '0').strip() # Pitchers also have GB
-                        fb_str = row.get(header_map.get('fb', 'FB'), '0').strip() # Pitchers also have FB
-                        bb_str = row.get(header_map.get('bb', 'BB'), '0').strip() # Pitchers also have BB
-                        b1_str = row.get(header_map.get('1b', '1B'), '0').strip() # Pitchers also have B1 allowed
-                        b2_str = row.get(header_map.get('2b', '2B'), '0').strip() # Pitchers also have B2 allowed
-                        hr_str = row.get(header_map.get('hr', 'HR'), '0').strip() # Pitchers also have HR allowed
-                        # Load IP Limit as outs - check both 'ip limit (outs)' and 'ip'
-                        ip_limit_outs = None
-                        ip_limit_outs_str = row.get(header_map.get('ip limit (outs)', 'IP Limit (Outs)'), '').strip()
-                        if ip_limit_outs_str:
-                             try:
-                                 ip_limit_outs = int(ip_limit_outs_str)
-                             except ValueError:
-                                 print(f"Warning: Invalid 'IP Limit (Outs)' for {player_name} in {filepath}: {ip_limit_outs_str}. Skipping IP limit.")
+                if all([player_name, role, position, onbase is not None, so is not None, gb is not None, fb is not None, bb is not None, b1 is not None, b1p is not None, b2 is not None, b3 is not None, hr is not None, pts is not None]):
+                    batter = Batter(player_name, position, onbase, so, gb, fb, bb, b1, b1p, b2, b3, hr, pts, year, set_name,
+                                    pos1=pos1, fld1=fld1, pos2=pos2, fld2=fld2, pos3=pos3, fld3=fld3, pos4=pos4, fld4=fld4)
+                    batter.team_role = role # Set the team role
+                    # The batter's position attribute is already set to the saved position from the JSON
 
-                        # If 'IP Limit (Outs)' was not found or invalid, try 'ip'
-                        if ip_limit_outs is None:
-                             ip_str = row.get(header_map.get('ip', 'IP'), '').strip()
-                             if ip_str:
-                                 try:
-                                     # Assume 'IP' in CSV is in innings, convert to outs (innings * 3)
-                                     ip_limit_innings = float(ip_str)
-                                     ip_limit_outs = int(ip_limit_innings * 3)
-                                 except ValueError:
-                                     print(f"Warning: Invalid 'IP' for {player_name} in {filepath}: {ip_str}. Skipping IP limit.")
-                        # --- END CORRECTED IP Handling ---
-
-
-                        try:
-                            control = int(control_str)
-                            pu = int(pu_str)
-                            so = int(so_str)
-                            gb = int(gb_str)
-                            fb = int(fb_str)
-                            bb = int(bb_str)
-                            b1 = int(b1_str)
-                            b2 = int(b2_str)
-                            hr = int(hr_str)
-                            # ip_limit_outs is now handled above
-                        except ValueError:
-                             print(f"Skipping pitcher row with invalid numeric data for {player_name} in {filepath}: {row}")
-                             continue
-
-
-                        # Note: The 'position' passed here is the raw position from the data source.
-                        pitcher = Pitcher(player_name, position, control, pu, so, gb, fb, bb, b1, b2, hr, pts, ip_limit_outs, year, set_name)
-                        # --- Set team_role for loaded pitchers ---
-                        pitcher.team_role = role
-                        # --- End set team_role ---
-                        if role == 'SP':
-                             # Ensure we don't add more than 4 SPs
-                             if len(starters) < 4:
-                                starters.append(pitcher)
-                             else:
-                                print(f"Warning: Too many starting pitchers in file {filepath}. Skipping {player_name}.")
-                        elif role == 'RP':
-                             # Ensure we don't add more than 6 RP/CL total
-                             if len(relievers) + len(closers) < 6:
-                                relievers.append(pitcher)
-                             else:
-                                print(f"Warning: Too many relievers/closers in file {filepath}. Skipping {player_name}.")
-                        elif role == 'CL':
-                             # Ensure we don't add more than 6 RP/CL total
-                             if len(relievers) + len(closers) < 6:
-                                closers.append(pitcher)
-                             else:
-                                print(f"Warning: Too many relievers/closers in file {filepath}. Skipping {player_name}.")
-
-
+                    if role == 'Starter':
+                        batters.append(batter)
+                    elif role == 'Bench':
+                        bench.append(batter)
                     else:
-                        print(f"Skipping row with unknown role '{role}' for {player_name} in {filepath}: {row}")
-                        continue
-
-                    total_points += pts # Accumulate total points
-
-
-                except Exception as e:
-                    print(f"Error processing row in {filepath}: {row} - {e}")
+                        print(f"Warning: Unknown batter role '{role}' for {player_name} in {filepath}. Skipping.")
+                else:
+                    print(f"Warning: Skipping incomplete batter data for {player_name} in {filepath}: {batter_data}")
+            except Exception as e:
+                 print(f"Error loading batter data from {filepath}: {batter_data} - {e}")
+                 continue
 
 
-        # Create the Team object
-        # Use the filename (without extension) as the team name initially.
-        # The name will be set to "Team 1" or "Team 2" in main.py after loading.
-        team_name_from_file = os.path.splitext(os.path.basename(filepath))[0]
+        # Load pitchers (Starters, Relievers, Closers)
+        for pitcher_data in team_data.get("starters", []) + team_data.get("relievers", []) + team_data.get("closers", []):
+            try:
+                role = pitcher_data.get("role")
+                player_name = pitcher_data.get("name")
+                position = pitcher_data.get("position") # Load the saved position
+                control = pitcher_data.get("control")
+                pu = pitcher_data.get("pu")
+                so = pitcher_data.get("so")
+                gb = pitcher_data.get("gb")
+                fb = pitcher_data.get("fb")
+                bb = pitcher_data.get("bb")
+                b1 = pitcher_data.get("1b") # Use '1b' key
+                b2 = pitcher_data.get("2b") # Use '2b' key
+                hr = pitcher_data.get("hr")
+                ip_limit_outs = pitcher_data.get("ip_limit_outs") # Load IP limit as outs
+                pts = pitcher_data.get("pts")
+                year = pitcher_data.get("year")
+                set_name = pitcher_data.get("set")
+
+
+                if all([player_name, role, position, control is not None, pu is not None, so is not None, gb is not None, fb is not None, bb is not None, b1 is not None, b2 is not None, hr is not None, pts is not None]):
+                     # ip_limit_outs can be None, so check separately
+                     pitcher = Pitcher(player_name, position, control, pu, so, gb, fb, bb, b1, b2, hr, pts, ip_limit_outs, year, set_name)
+                     pitcher.team_role = role # Set the team role
+
+                     if role == 'SP':
+                         starters_pitchers.append(pitcher)
+                     elif role == 'RP':
+                         relievers.append(pitcher)
+                     elif role == 'CL':
+                         closers.append(pitcher)
+                     else:
+                         print(f"Warning: Unknown pitcher role '{role}' for {player_name} in {filepath}. Skipping.")
+                else:
+                     print(f"Warning: Skipping incomplete pitcher data for {player_name} in {filepath}: {pitcher_data}")
+            except Exception as e:
+                 print(f"Error loading pitcher data from {filepath}: {pitcher_data} - {e}")
+                 continue
+
 
         # Basic validation: check if we have enough players for a valid team
-        # Check for exactly 9 starters, 1 bench, and exactly 10 pitchers (4 SP + 6 RP/CL)
-        if len(batters) == 9 and len(bench) == 1 and len(starters) == 4 and (len(relievers) + len(closers)) == 6:
+        if len(batters) == 9 and len(bench) == 1 and len(starters_pitchers) == 4 and (len(relievers) + len(closers)) == 6:
+             loaded_team = Team(team_name_from_file, batters, starters_pitchers, relievers, closers, bench)
+             # Optionally, verify loaded_total_points if it was in the JSON
+             if loaded_total_points is not None and loaded_team.total_points != loaded_total_points:
+                 print(f"Warning: Calculated total points ({loaded_team.total_points}) mismatch with saved points ({loaded_total_points}) for team '{team_name_from_file}'.")
              # print(f"Successfully loaded team '{team_name_from_file}' from {filepath}") # Debug print removed
-             # Recalculate total points to be sure
-             calculated_total_points = sum(p.pts for p in batters + bench + starters + relievers + closers)
-             # You might want to use the calculated_total_points instead of the accumulated one
-             # or add a check if they match. For now, let's use the calculated one for the Team object.
-             loaded_team = Team(team_name_from_file, batters, starters, relievers, closers, bench)
-             loaded_team.total_points = calculated_total_points # Update total points in the Team object
              return loaded_team
         else:
              print(f"Error loading team from {filepath}: Invalid roster size.")
-             print(f"Expected: 9 Starters, 1 Bench, 4 SP, 6 RP/CL. Found: {len(batters)} Starters, {len(bench)} Bench, {len(starters)} SP, {len(relievers) + len(closers)} RP/CL.")
+             print(f"Expected: 9 Starters, 1 Bench, 4 SP, 6 RP/CL. Found: {len(batters)} Starters, {len(bench)} Bench, {len(starters_pitchers)} SP, {len(relievers) + len(closers)} RP/CL.")
              return None
 
 
     except FileNotFoundError:
         print(f"Error: Team file not found at {filepath}")
+        return None
+    except json.JSONDecodeError:
+        print(f"Error: Could not decode JSON from {filepath}. Please check the file format.")
         return None
     except Exception as e:
         print(f"Error loading team from {filepath}: {e}")

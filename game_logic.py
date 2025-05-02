@@ -652,8 +652,11 @@ def display_linescore(team1_name, team2_name, team1_inning_runs, team2_inning_ru
     # Determine the maximum number of innings played
     max_innings = max(len(team1_inning_runs), len(team2_inning_runs))
 
+    # Determine the max team name length
+    max_team_length = max(len(team1_name), len(team2_name))
+
     # Create the header row
-    header = ["Team"] + [str(i + 1) for i in range(max_innings)] + ["R", "H"] # Add H column placeholder
+    header = ["Team"+" "*(max_team_length-4)] + [str(i + 1) for i in range(max_innings)] + ["R", "H"] # Add H column placeholder
     print(" | ".join(header))
     print("-" * (len(" | ".join(header)) + 2)) # Separator line
 
@@ -687,7 +690,7 @@ def display_boxscore(team: Team):
     print("\nBatting:")
     # Adjusted spacing for batting stats
     print(f"{'Name':<20} {'Pos':<5} {'PA':<3} {'AB':<3} {'R':<3} {'H':<3} {'RBI':<3} {'BB':<3} {'SO':<3} {'AVG':<5} {'OBP':<5} {'SLG':<5} {'OPS':<5}")
-    print("-" * 90) # Adjusted separator length
+    print("-" * 79) # Adjusted separator length
 
     # Display Batting Stats for Starters and Bench
     for player in team.batters + team.bench:
@@ -704,7 +707,7 @@ def display_boxscore(team: Team):
     print("\nPitching:")
     # Adjusted spacing for pitching stats
     print(f"{'Name':<20} {'Role':<5} {'IP':<5} {'BF':<4} {'R':<3} {'ER':<3} {'H':<3} {'BB':<3} {'SO':<3} {'ERA':<5} {'WHIP':<5}")
-    print("-" * 90) # Adjusted separator length
+    print("-" * 70) # Adjusted separator length
 
     # Display Pitching Stats for all Pitchers
     for pitcher in team.all_pitchers:

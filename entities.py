@@ -387,7 +387,7 @@ class Team:
         # --- END ADDED ---
 
         # --- DEBUG PRINT ---
-        print(f"DEBUG: Team '{self.name}' initialized. Has 'used_starters': {'used_starters' in dir(self)}")
+        #print(f"DEBUG: Team '{self.name}' initialized. Has 'used_starters': {'used_starters' in dir(self)}")
         # --- END DEBUG PRINT ---
 
 

@@ -3,15 +3,13 @@
 # It handles loading player data, creating teams, running the game, and displaying results.
 
 import os
-import glob # Import glob to find CSV files
-import random # Import random for team selection
-import csv # Import csv for reading team files if needed
+import glob # Import glob to find team files
 
 # Import classes and functions from other modules
 # --- CORRECTED: Import Team from entities ---
 from entities import Batter, Pitcher, Team # Import Batter, Pitcher, and Team classes
 # --- REMOVED: from team import Team # Remove the import from team.py ---
-from team_management import load_players_from_json, create_random_team, save_team_to_csv, load_team_from_csv, get_next_team_number # Import team management functions
+from team_management import load_players_from_json, create_random_team, save_team_to_json, load_team_from_json, get_next_team_number # Import team management functions
 # --- CORRECTED: Import display functions from game_logic ---
 from game_logic import play_game, display_linescore, display_boxscore # Import game simulation and display functions
 # --- END CORRECTED ---
@@ -35,8 +33,8 @@ def get_team_choice(team_number, all_players, min_points, max_points):
         Team or None: The selected or generated Team object, or None if creation/loading fails.
     """
     while True:
-        choice = input(f"For Team {team_number} ({'Away' if team_number == 1 else 'Home'}), do you want to (G)enerate a random team or (L)oad an existing team? (G/L): ").strip().lower()
-        if choice == 'g':
+        choice = input(f"For Team {team_number} ({'Away' if team_number == 1 else 'Home'}), Press Enter to generate random team, L to load a team: ").strip().lower()
+        if choice == '':
             team_name = input(f"Enter name for Team {team_number}: ").strip()
             if not team_name:
                 team_name = f"Random Team {get_next_team_number(TEAMS_DIR)}" # Generate a default name if none provided
@@ -44,15 +42,15 @@ def get_team_choice(team_number, all_players, min_points, max_points):
             if team:
                 # Save the generated team
                 next_team_num = get_next_team_number(TEAMS_DIR)
-                team_save_filename = f"Team_{next_team_num}_{team.total_points}.csv"
+                team_save_filename = f"Team_{next_team_num}_{team.total_points}.json"
                 team_save_filepath = os.path.join(TEAMS_DIR, team_save_filename)
-                save_team_to_csv(team, team_save_filepath)
+                save_team_to_json(team, team_save_filepath)
                 return team
             else:
                 print("Failed to generate a team. Please try again.")
         elif choice == 'l':
             # List available team files
-            available_teams = glob.glob(os.path.join(TEAMS_DIR, 'Team_*.csv'))
+            available_teams = glob.glob(os.path.join(TEAMS_DIR, 'Team_*.json'))
             if not available_teams:
                 print("No saved teams found. Please generate a team instead.")
                 continue
@@ -66,7 +64,7 @@ def get_team_choice(team_number, all_players, min_points, max_points):
                     file_index = int(input(f"Enter the number of the team file to load for Team {team_number}: ")) - 1
                     if 0 <= file_index < len(available_teams):
                         filepath = available_teams[file_index]
-                        team = load_team_from_csv(filepath)
+                        team = load_team_from_json(filepath)
                         if team:
                             # Update team name to match the generic "Away Team" or "Home Team" for the game
                             team.name = f"{'Away' if team_number == 1 else 'Home'} Team"
@@ -127,17 +125,16 @@ def main():
     print("\n--- Game Over ---")
     print(f"Final Score: {team1.name} {away_score} - {team2.name} {home_score}")
 
+    # print("\n--- Game Log ---")
+    # for entry in game_log:
+    #     print(entry)
+
     # Display the linescore
     display_linescore(team1.name, team2.name, team1_inning_runs, team2_inning_runs, away_score, home_score)
 
     # Display the boxscores
     display_boxscore(team1)
     display_boxscore(team2)
-
-
-    print("\n--- Game Log ---")
-    for entry in game_log:
-        print(entry)
 
 
 if __name__ == "__main__":
