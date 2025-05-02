@@ -359,11 +359,19 @@ class Team:
             bench (list): A list of Batter objects for the bench.
         """
         self.name = name
-        self.batters = batters # This is now explicitly the starting lineup
-        self.starters = starters
+
+        # Batters acts as the lineup and is by default sorted by descending pts (as per Showdown manual suggestion)
+        self.batters = sorted(batters, key=lambda x: x.pts, reverse=True)
+        self.bench = bench  # Added bench attribute
+
+        # Starts will act as the rotation for multiple games as well, so we'll sort by pts
+        self.starters = sorted(starters, key=lambda x: x.pts, reverse=True)
+
+        # We'll do the same sorting for the bullpen
         self.relievers = relievers
         self.closers = closers
-        self.bench = bench # Added bench attribute
+        self.bullpen = sorted(self.relievers+self.closers, key = lambda x: x.pts, reverse=True)
+
         # Combine all pitchers into one list for easier iteration if needed
         self.all_pitchers = starters + relievers + closers
         # Set the initial current pitcher - prefer SP, then RP, then CL
@@ -379,12 +387,9 @@ class Team:
         self.current_batter_index = 0 # Index of the next batter in the lineup
 
         # Keep track of which relievers/closers have already pitched
-        # Note: Starters are not added to used_relievers/used_closers
         self.used_relievers = []
         self.used_closers = []
-        # --- ADDED: Track used starters separately ---
         self.used_starters = []
-        # --- END ADDED ---
 
         # --- DEBUG PRINT ---
         #print(f"DEBUG: Team '{self.name}' initialized. Has 'used_starters': {'used_starters' in dir(self)}")

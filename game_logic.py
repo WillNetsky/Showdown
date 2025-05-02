@@ -311,7 +311,7 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
 
 
     # Include roll values and pitch quality in the log entry
-    inning_log.append(f"{concise_batter_info} vs. {concise_pitcher_info} ({runners_display}) [Pitch Roll: {pitch_result} ({pitch_quality_text}), Swing Roll: {swing_roll}]: {result}")
+    inning_log.append(f"{concise_batter_info} vs. {concise_pitcher_info} ({runners_display}) [Pitch: {pitch_result} ({pitch_quality_text}), Swing: {swing_roll}]: {result}")
 
     # Update stats and runners based on the result
     if result == "Out":
@@ -710,7 +710,7 @@ def display_boxscore(team: Team):
     print("-" * 70) # Adjusted separator length
 
     # Display Pitching Stats for all Pitchers
-    for pitcher in team.all_pitchers:
+    for pitcher in team.used_starters+team.used_relievers+team.used_closers:
         # Calculate derived stats
         era = pitcher.calculate_era()
         whip = pitcher.calculate_whip()
