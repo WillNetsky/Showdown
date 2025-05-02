@@ -699,7 +699,7 @@ def display_boxscore(team: Team):
     print("-" * 70) # Adjusted separator length
 
     # Display Pitching Stats for all Pitchers
-    for pitcher in team.all_pitchers:
+    for pitcher in team.used_starters+team.used_relievers+team.used_closers:
         # Calculate derived stats
         era = pitcher.calculate_era()
         whip = pitcher.calculate_whip()
