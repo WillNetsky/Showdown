@@ -678,7 +678,7 @@ def display_boxscore(team: Team):
     # Added OPS+ column placeholder
     print("\nBatting:")
     # Adjusted spacing for batting stats
-    print(f"{'Name':<20} {'Pos':<5} {'PA':<3} {'AB':<3} {'R':<3} {'H':<3} {'RBI':<3} {'BB':<3} {'SO':<3} {'AVG':<5} {'OBP':<5} {'SLG':<5} {'OPS':<5}")
+    print(f"{'Name':<20} {'Pos':<5} {'PA':<3} {'AB':<3} {'R':<3} {'H':<3} {'RBI':<3} {'BB':<3} {'SO':<4} {'AVG':<4} {'OBP':<4} {'SLG':<4} {'OPS':<4}")
     print("-" * 79) # Adjusted separator length
 
     # Display Batting Stats for Starters and Bench
