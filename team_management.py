@@ -445,7 +445,7 @@ def create_random_team(all_players, team_name, min_points, max_points, max_attem
                  print(f"Successfully created team {team_name} with {current_total_points} points.") # Debug print restored
                  return Team(team_name, selected_starters, selected_sps, selected_rps, selected_cls, selected_bench)
              else:
-                 print(f"Attempt {attempt+1}: Team points {current_total_points} outside range [{min_points}, {max_points}]. Retrying...") # Debug print restored
+                 #print(f"Attempt {attempt+1}: Team points {current_total_points} outside range [{min_points}, {max_points}]. Retrying...") # Debug print restored
                  continue # Points outside range, try again
         else:
              # This else block is for the case where the roster size check fails
