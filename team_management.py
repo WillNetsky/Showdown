@@ -225,7 +225,7 @@ def get_next_team_number(teams_dir):
     return max_number + 1
 
 
-def create_random_team(all_players, team_name, min_points, max_points, max_attempts=1000):
+def create_random_team(all_players, team_name, min_points=MIN_TEAM_POINTS, max_points=MAX_TEAM_POINTS, max_attempts=1000):
     """
     Creates a random team from the list of all players, adhering to roster requirements
     and total points limits.
@@ -388,7 +388,6 @@ def create_random_team(all_players, team_name, min_points, max_points, max_attem
         #print(f"Successfully selected {len(selected_sps)} starting pitchers.") # Debug print restored
 
         # Select Relievers/Closers (6 RP/CL) from remaining pitchers
-        rp_cl_count = 0
         #print("  Considering pitchers for RP/CL roles:") # Debug print restored
         # Iterate through a copy to allow removal
         for pitcher in list(temp_pitchers):
@@ -553,7 +552,7 @@ def save_team_to_json(team: Team, filepath: str):
                 "1b": pitcher.b1, # Use '1b' key to match load_players_from_json
                 "2b": pitcher.b2, # Use '2b' key to match load_players_from_json
                 "hr": pitcher.hr,
-                "ip_limit_outs": pitcher.ip_limit, # Save IP limit as outs
+                "ip_limit_outs": pitcher.out_limit, # Save IP limit as outs
                 "pts": pitcher.pts,
                 "year": pitcher.year,
                 "set": pitcher.set,
@@ -573,7 +572,7 @@ def save_team_to_json(team: Team, filepath: str):
                 "1b": pitcher.b1, # Use '1b' key to match load_players_from_json
                 "2b": pitcher.b2, # Use '2b' key to match load_players_from_json
                 "hr": pitcher.hr,
-                "ip_limit_outs": pitcher.ip_limit, # Save IP limit as outs
+                "ip_limit_outs": pitcher.out_limit, # Save IP limit as outs
                 "pts": pitcher.pts,
                 "year": pitcher.year,
                 "set": pitcher.set,
@@ -593,7 +592,7 @@ def save_team_to_json(team: Team, filepath: str):
                 "1b": pitcher.b1, # Use '1b' key to match load_players_from_json
                 "2b": pitcher.b2, # Use '2b' key to match load_players_from_json
                 "hr": pitcher.hr,
-                "ip_limit_outs": pitcher.ip_limit, # Save IP limit as outs
+                "ip_limit_outs": pitcher.out_limit, # Save IP limit as outs
                 "pts": pitcher.pts,
                 "year": pitcher.year,
                 "set": pitcher.set,
