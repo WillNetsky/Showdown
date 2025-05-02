@@ -73,24 +73,28 @@ def get_team_choice(team_number, all_players):
         else:
             print("Invalid choice. Please enter 'G' or 'L'.")
 
-def main():
-    """
-    Main function to load players, create/load teams, and simulate a game.
-    """
-    print("Starting Baseball Simulation...")
-
+def load_player_json(player_json_file):
     # --- Load Player Data ---
-    if not os.path.exists(PLAYER_DATA_FILE):
-        print(f"Error: Player data file not found at {PLAYER_DATA_FILE}. Please ensure '{PLAYER_DATA_FILE}' is in the same directory.")
+    if not os.path.exists(player_json_file):
+        print(f"Error: Player data file not found at {player_json_file}. Please ensure '{player_json_file}' is in the same directory.")
         return
 
-    all_players = load_players_from_json(PLAYER_DATA_FILE)
+    all_players = load_players_from_json(player_json_file)
 
     if not all_players:
         print("No player data loaded. Exiting.")
         return
 
     print(f"Successfully loaded {len(all_players)} players.")
+    return all_players
+
+def main():
+    """
+    Main function to load players, create/load teams, and simulate a game.
+    """
+    print("Starting Baseball Simulation...")
+
+    all_players = load_player_json(PLAYER_DATA_FILE)
 
     # --- Team Creation or Loading ---
     print("\nSetting up teams...")
@@ -125,7 +129,7 @@ def main():
     # Display the linescore
     display_linescore(team1.name, team2.name, team1_inning_runs, team2_inning_runs, away_score, home_score)
 
-    # Display the boxscores
+    # Display the box-score for each team
     display_boxscore(team1)
     display_boxscore(team2)
 
