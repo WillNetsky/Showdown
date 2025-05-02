@@ -376,7 +376,7 @@ def handle_pitching_change(pitching_team: Team, batting_team: Team, inning_numbe
     Selects a random available reliever or closer.
 
     Args:
-        pitching_team (Team): The team needing a pitching change.
+        pitching_team (Team): The team in need of a pitching change.
         batting_team (Team): The team currently batting.
         inning_number (int): The current inning number.
         half_inning (str): "Top" or "Bottom".
@@ -389,20 +389,15 @@ def handle_pitching_change(pitching_team: Team, batting_team: Team, inning_numbe
     next_pitcher = None
 
     # Create a combined list of available relievers and closers
-    available_rp_cl = pitching_team.get_available_reliever_or_closer_pool()
+    available_bullpen = pitching_team.get_available_bullpen()
 
-    if available_rp_cl:
+    if available_bullpen:
         # Select a random pitcher from the available pool
-        next_pitcher = random.choice(available_rp_cl)
+        next_pitcher = available_bullpen[0]
         pitching_team.current_pitcher = next_pitcher
 
-        # Add the selected pitcher to the appropriate used list
-        if next_pitcher.position == 'CL':
-            pitching_team.used_closers.append(next_pitcher)
-            inning_log.append(f"Pitching Change: {pitching_team.current_pitcher.name} enters the game (Closer).")
-        else: # Assumes 'RP' or 'P'
-            pitching_team.used_relievers.append(next_pitcher)
-            inning_log.append(f"Pitching Change: {pitching_team.current_pitcher.name} enters the game (Reliever).")
+        pitching_team.used_relievers.append(next_pitcher)
+        inning_log.append(f"Pitching Change: {pitching_team.current_pitcher.name} enters the game (Reliever).")
     else:
         inning_log.append("Error: No available relievers or closers for pitching change.")
         pitching_team.current_pitcher = None # No pitcher available
