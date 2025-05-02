@@ -508,8 +508,8 @@ def save_team_to_json(team: Team, filepath: str):
              team_data["bench"].append({
                 "type": "batter",
                 "role": "Bench",
-                "name": batter.name,
-                "position": batter.position, # Save the raw position for bench
+                                "name": batter.name,
+                "position": "Bn", # Save the assigned defensive position
                 "onbase": batter.on_base,
                 "so": batter.so,
                 "gb": batter.gb,
@@ -523,7 +523,7 @@ def save_team_to_json(team: Team, filepath: str):
                 "pts": batter.pts,
                 "year": batter.year,
                 "set": batter.set,
-                 # Include additional positions if they exist on the original player object
+                # Include additional positions if they exist on the original player object
                 "pos1": getattr(batter, 'pos1', ''),
                 "fld1": getattr(batter, 'fld1', ''),
                 "pos2": getattr(batter, 'pos2', ''),
@@ -634,7 +634,7 @@ def load_team_from_json(filepath: str):
         loaded_total_points = team_data.get("total_points") # Get total points from data
 
         # Load batters (Starters and Bench)
-        for batter_data in team_data.get("batters", []):
+        for batter_data in team_data.get("batters", []) + team_data.get("bench", []):
             try:
                 role = batter_data.get("role")
                 player_name = batter_data.get("name")
