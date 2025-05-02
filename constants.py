@@ -31,3 +31,6 @@ STARTING_POSITIONS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH']
 # MLB Showdown Rule: Max 5000 points for a 20-player team
 MIN_TEAM_POINTS = 4500
 MAX_TEAM_POINTS = 5000
+
+# Create a maximum number of innings to stop infinite games
+MAX_INNINGS = 1000
