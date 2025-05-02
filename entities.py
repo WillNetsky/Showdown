@@ -244,6 +244,7 @@ class Pitcher:
         self.hr = hr
         self.pts = pts
         self.ip_limit = ip_limit # Added IP limit attribute
+        self.out_limit = ip_limit*3
         self.year = year # Store year
         self.set = set_name # Store set name
 
@@ -280,7 +281,7 @@ class Pitcher:
         Returns:
             float: The ERA, or 0.0 if innings pitched are zero.
         """
-        if self.innings_pitched == 0:
+        if self.outs_recorded == 0:
             return 0.0
         return (self.earned_runs_allowed * 9) / self.innings_pitched
 
@@ -304,20 +305,10 @@ class Pitcher:
             str: The formatted innings pitched string.
         """
         # Get the whole innings and the fractional part
-        whole_innings = int(self.innings_pitched)
-        fractional_part = self.innings_pitched - whole_innings
+        whole_innings = int(self.outs_recorded/3)
+        fractional_part = self.outs_recorded % 3
 
-        # Check if the fractional part is close to 1/3 or 2/3
-        if math.isclose(fractional_part, 1/3, abs_tol=1e-9):
-            return f"{whole_innings}.1"
-        elif math.isclose(fractional_part, 2/3, abs_tol=1e-9):
-            return f"{whole_innings}.2"
-        else:
-            # If the fractional part is very close to 0 (e.g., exactly X.0), display as integer
-            if math.isclose(fractional_part, 0.0, abs_tol=1e-9):
-                 return str(whole_innings)
-            # Otherwise, just return the float rounded to one decimal place (shouldn't happen with 1/3 increments)
-            return f"{self.innings_pitched:.1f}"
+        return str(whole_innings)+"."+str(fractional_part)
 
 
     def __str__(self):

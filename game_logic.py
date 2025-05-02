@@ -692,8 +692,8 @@ def display_boxscore(team: Team):
     print(f"{'Name':<20} {'Pos':<5} {'PA':<3} {'AB':<3} {'R':<3} {'H':<3} {'RBI':<3} {'BB':<3} {'SO':<3} {'AVG':<5} {'OBP':<5} {'SLG':<5} {'OPS':<5}")
     print("-" * 79) # Adjusted separator length
 
-    # Display Batting Stats for Starters and Bench
-    for player in team.batters + team.bench:
+    # Display Batting Stats for Starters
+    for player in team.batters:
         # Calculate derived stats
         avg = player.calculate_avg()
         obp = player.calculate_obp()
@@ -702,6 +702,11 @@ def display_boxscore(team: Team):
 
         # Format and print batting stats
         print(f"{player.name:<20} {player.position:<5} {player.plate_appearances:<3} {player.at_bats:<3} {player.runs_scored:<3} {player.hits:<3} {player.rbi:<3} {player.walks:<3} {player.strikeouts:<3} {avg:<5.3f} {obp:<5.3f} {slg:<5.3f} {ops:<5.3f}")
+
+    print("-" * 79)  # Adjusted separator length
+    for player in team.bench:
+        # Format and print bench line
+        print(f"{player.name:<20} BN")
 
     # Pitching Stats Header
     print("\nPitching:")
