@@ -578,11 +578,11 @@ def play_game(team1: Team, team2: Team, num_innings=9):
         team1_inning_runs.append(runs_team1_this_inning) # Record runs for the inning
 
         # Check for game end after the top of the 9th or later if the away team is ahead
-        if current_inning >= num_innings and game_state[team1.name] > game_state[team2.name]:
+        if current_inning >= num_innings and game_state[team2.name] > game_state[team1.name]:
             game_log.append(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
             game_over = True
             # Add 0 runs for the bottom of the inning if it wasn't played
-            team2_inning_runs.append(0)
+            team2_inning_runs.append("-")
             break # End the game
 
         # Bottom of the inning: Team 2 bats, Team 1 pitches
