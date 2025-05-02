@@ -2,7 +2,6 @@
 # Contains the functions for simulating gameplay and displaying results.
 
 import random
-import math # Import math for floating point comparison
 
 # Import necessary classes and constants from other modules
 from entities import Batter, Pitcher, Team # Import Batter, Pitcher, and Team classes
@@ -311,7 +310,7 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
 
 
     # Include roll values and pitch quality in the log entry
-    inning_log.append(f"{concise_batter_info} vs. {concise_pitcher_info} ({runners_display}) [Pitch: {pitch_result} ({pitch_quality_text}), Swing: {swing_roll}]: {result}")
+    inning_log.append(f"{concise_batter_info} vs. {concise_pitcher_info} ({runners_display}) [Pitch Roll: {pitch_result} ({pitch_quality_text}), Swing Roll: {swing_roll}]: {result}")
 
     # Update stats and runners based on the result
     if result == "Out":
@@ -360,10 +359,6 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
         inning_log.append(f"Warning: Unhandled result '{result}' for {batter.name}. Treating as Out.")
         result = "Out"
         batter.outs += 1
-        # --- CORRECTED: Use outs_recorded instead of total_outs_pitched ---
-        pitcher.outs_recorded += 1
-        # --- END CORRECTED ---
-        # IP is updated in play_inning based on outs
 
     # Update RBI for the batter who drove in runs
     if runs_scored > 0:
@@ -373,6 +368,7 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
 
 
     return result, runs_scored, new_runners
+
 
 def handle_pitching_change(pitching_team: Team, batting_team: Team, inning_number, half_inning, game_state, inning_log):
     """
@@ -445,15 +441,15 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
     # Check for pitching change right at the start of the inning if the pitcher is already at their limit
     # This handles cases where a pitcher finished the previous inning over their limit
-    # if pitcher and pitcher.out_limit is not None and pitcher.outs_recorded >= pitcher.out_limit:
-    #     inning_log.append(f"Pitching Change: {pitcher.name} ({pitcher.get_formatted_ip():.1f} IP) reached IP limit and is replaced.")
-    #     # Pass batting_team to handle_pitching_change
-    #     pitcher = handle_pitching_change(pitching_team, batting_team, inning_number, half_inning, game_state, inning_log)
-    #     # If handle_pitching_change returns None, the inning cannot continue
-    #     if pitcher is None:
-    #          inning_log.append("Error: No pitcher available to start inning.")
-    #          game_log.extend(inning_log)
-    #          return 0 # No runs scored if no pitcher
+    if pitcher and pitcher.out_limit is not None and pitcher.outs_recorded >= pitcher.out_limit:
+        inning_log.append(f"Pitching Change: {pitcher.name} ({pitcher.outs_recorded:.1f} Outs) reached IP limit and is replaced.")
+        # Pass batting_team to handle_pitching_change
+        pitcher = handle_pitching_change(pitching_team, batting_team, inning_number, half_inning, game_state, inning_log)
+        # If handle_pitching_change returns None, the inning cannot continue
+        if pitcher is None:
+             inning_log.append("Error: No pitcher available to start inning.")
+             game_log.extend(inning_log)
+             return 0 # No runs scored if no pitcher
 
 
     while outs < 3:
@@ -467,8 +463,8 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
         # --- Check for pitching change BEFORE the plate appearance if facing this batter exceeds limit ---
         # This handles cases where a pitcher is just under their limit and the next batter would push them over
-        if pitcher and pitcher.out_limit is not None and (pitcher.outs_recorded >= pitcher.out_limit):
-             inning_log.append(f"Pitching Change: {pitcher.name} ({pitcher.get_formatted_ip():.1f} IP) is replaced to avoid exceeding IP limit.")
+        if pitcher and pitcher.out_limit is not None and (pitcher.outs_recorded > pitcher.out_limit):
+             inning_log.append(f"Pitching Change: {pitcher.name} ({pitcher.outs_recorded:.1f} IP) is replaced to avoid exceeding IP limit.")
              # Pass batting_team to handle_pitching_change
              pitcher = handle_pitching_change(pitching_team, batting_team, inning_number, half_inning, game_state, inning_log)
              # If handle_pitching_change returns None, the inning cannot continue
@@ -515,7 +511,6 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
     game_log.extend(inning_log) #add inning log to game log
     return runs_scored_this_inning # Return the runs scored in this segment of the inning
-
 
 def play_game(team1: Team, team2: Team, num_innings=9):
     """
@@ -694,11 +689,6 @@ def display_boxscore(team: Team):
 
         # Format and print batting stats
         print(f"{player.name:<20} {player.position:<5} {player.plate_appearances:<3} {player.at_bats:<3} {player.runs_scored:<3} {player.hits:<3} {player.rbi:<3} {player.walks:<3} {player.strikeouts:<3} {avg:<5.3f} {obp:<5.3f} {slg:<5.3f} {ops:<5.3f}")
-
-    print("-" * 79)  # Adjusted separator length
-    for player in team.bench:
-        # Format and print bench line
-        print(f"{player.name:<20} BN")
 
     # Pitching Stats Header
     print("\nPitching:")
