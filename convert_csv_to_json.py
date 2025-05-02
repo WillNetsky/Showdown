@@ -4,7 +4,7 @@ import os
 
 def convert_player_csvs_to_json(batters_filepath, pitchers_filepath, output_filepath):
     """
-    Reads player data from separate batters and pitchers CSVs,
+    reads player data from separate batters and pitchers CSVs,
     combines them into a single list of dictionaries with a 'type' field,
     and saves the list to a JSON file.
 

@@ -6,8 +6,7 @@
 import random
 import os # Needed to check for file existence
 
-# Import necessary functions and classes from your project files
-# Import load_players_from_json from team_management
+# Import functions and classes from your project files
 from team_management import load_players_from_json
 from entities import Batter, Pitcher
 from game_logic import get_chart_result # Only need get_chart_result, roll_dice is not used for exhaustive test

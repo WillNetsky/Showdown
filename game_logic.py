@@ -5,7 +5,6 @@ import random
 
 # Import necessary classes and constants from other modules
 from entities import Batter, Pitcher, Team # Import Batter, Pitcher, and Team classes
-from constants import POSITION_MAPPING, STARTING_POSITIONS, MIN_TEAM_POINTS, MAX_TEAM_POINTS
 
 def roll_dice(num_dice, sides):
     """
