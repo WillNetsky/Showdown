@@ -425,7 +425,7 @@ class Team:
             return self.closers[0]
         return None # Closer not available or already used
 
-    def get_available_reliever_or_closer_pool(self):
+    def get_available_bullpen(self):
         """
         Creates a pool of available relievers and closers.
 
@@ -433,11 +433,8 @@ class Team:
             list: A list of available Pitcher objects (RP or CL).
         """
         available_pool = []
-        for reliever in self.relievers:
+        for reliever in self.bullpen:
             if reliever not in self.used_relievers:
                 available_pool.append(reliever)
-        # Assuming only one closer, add if not used
-        if self.closers and self.closers[0] not in self.used_closers:
-             available_pool.append(self.closers[0])
 
         return available_pool
