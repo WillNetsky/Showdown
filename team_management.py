@@ -12,13 +12,12 @@
 import random
 # Removed csv import as it's no longer used for team save/load
 import os
-import glob
 import re # Import regex module
 import json # Import json module
 
 # Import necessary classes and constants
 from entities import Batter, Pitcher, Team # Import Batter, Pitcher, and Team classes
-from constants import POSITION_MAPPING, STARTING_POSITIONS, MIN_TEAM_POINTS, MAX_TEAM_POINTS
+from constants import STARTING_POSITIONS, MIN_TEAM_POINTS, MAX_TEAM_POINTS
 
 def load_players_from_json(filepath):
     """
