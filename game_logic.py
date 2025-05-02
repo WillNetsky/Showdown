@@ -409,6 +409,7 @@ def handle_pitching_change(pitching_team: Team, batting_team: Team, inning_numbe
 
     return pitching_team.current_pitcher
 
+
 def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log, half_inning, game_state):
     """
     Simulates a single inning of a game.
@@ -506,6 +507,7 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
     # Only add runs_scored_this_inning to game_state here if it wasn't a walk-off
     # In a walk-off, runs were added to game_state within the walk-off check
     if not (half_inning == "Bottom" and inning_number >= 9 and game_state[batting_team.name] > game_state[pitching_team.name]):
+         print(str(batting_team.name) + ": " + str(runs_scored_this_inning))
          game_state[batting_team.name] += runs_scored_this_inning
 
 
@@ -679,8 +681,8 @@ def display_boxscore(team: Team):
     print(f"{'Name':<20} {'Pos':<5} {'PA':<3} {'AB':<3} {'R':<3} {'H':<3} {'RBI':<3} {'BB':<3} {'SO':<3} {'AVG':<5} {'OBP':<5} {'SLG':<5} {'OPS':<5}")
     print("-" * 79) # Adjusted separator length
 
-    # Display Batting Stats for Starters
-    for player in team.batters:
+    # Display Batting Stats for Starters and Bench
+    for player in team.batters + team.bench:
         # Calculate derived stats
         avg = player.calculate_avg()
         obp = player.calculate_obp()
@@ -697,7 +699,7 @@ def display_boxscore(team: Team):
     print("-" * 70) # Adjusted separator length
 
     # Display Pitching Stats for all Pitchers
-    for pitcher in team.used_starters+team.used_relievers+team.used_closers:
+    for pitcher in team.all_pitchers:
         # Calculate derived stats
         era = pitcher.calculate_era()
         whip = pitcher.calculate_whip()

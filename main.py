@@ -6,28 +6,20 @@ import os
 import glob # Import glob to find team files
 
 # Import classes and functions from other modules
-# --- CORRECTED: Import Team from entities ---
-from entities import Batter, Pitcher, Team # Import Batter, Pitcher, and Team classes
-# --- REMOVED: from team import Team # Remove the import from team.py ---
 from team_management import load_players_from_json, create_random_team, save_team_to_json, load_team_from_json, get_next_team_number # Import team management functions
-# --- CORRECTED: Import display functions from game_logic ---
 from game_logic import play_game, display_linescore, display_boxscore # Import game simulation and display functions
-# --- END CORRECTED ---
-from constants import MIN_TEAM_POINTS, MAX_TEAM_POINTS # Import constants
 
 # Define the path for player data and saved teams
 PLAYER_DATA_FILE = 'all_players.json' # Assuming a single JSON file for all players
 TEAMS_DIR = 'teams'
 
-def get_team_choice(team_number, all_players, min_points, max_points):
+def get_team_choice(team_number, all_players):
     """
     Prompts the user to choose between generating or loading a team.
 
     Args:
         team_number (int): The number of the team being selected (1 for Away, 2 for Home).
         all_players (list): A list of all available Batter and Pitcher objects.
-        min_points (int): Minimum points for random team generation.
-        max_points (int): Maximum points for random team generation.
 
     Returns:
         Team or None: The selected or generated Team object, or None if creation/loading fails.
@@ -38,7 +30,7 @@ def get_team_choice(team_number, all_players, min_points, max_points):
             team_name = input(f"Enter name for Team {team_number}: ").strip()
             if not team_name:
                 team_name = f"Random Team {get_next_team_number(TEAMS_DIR)}" # Generate a default name if none provided
-            team = create_random_team(all_players, team_name, min_points, max_points)
+            team = create_random_team(all_players, team_name)
             if team:
                 # Save the generated team
                 next_team_num = get_next_team_number(TEAMS_DIR)
@@ -103,13 +95,13 @@ def main():
     print("\nSetting up teams...")
 
     # Get Away Team (Team 1)
-    team1 = get_team_choice(1, all_players, MIN_TEAM_POINTS, MAX_TEAM_POINTS)
+    team1 = get_team_choice(1, all_players)
     if team1 is None:
         print("Team 1 setup failed. Exiting.")
         return
 
     # Get Home Team (Team 2)
-    team2 = get_team_choice(2, all_players, MIN_TEAM_POINTS, MAX_TEAM_POINTS)
+    team2 = get_team_choice(2, all_players)
     if team2 is None:
         print("Team 2 setup failed. Exiting.")
         return
@@ -125,9 +117,9 @@ def main():
     print("\n--- Game Over ---")
     print(f"Final Score: {team1.name} {away_score} - {team2.name} {home_score}")
 
-    # print("\n--- Game Log ---")
-    # for entry in game_log:
-    #     print(entry)
+    print("\n--- Game Log ---")
+    for entry in game_log:
+        print(entry)
 
     # Display the linescore
     display_linescore(team1.name, team2.name, team1_inning_runs, team2_inning_runs, away_score, home_score)
