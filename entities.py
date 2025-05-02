@@ -3,7 +3,7 @@
 
 # Import necessary constants
 from constants import POSITION_MAPPING # Import POSITION_MAPPING
-import math # Import math for floating point comparison
+
 
 class Batter:
     def __init__(self, name, position, onbase, so, gb, fb, bb ,b1, b1p, b2, b3, hr, pts, year=None, set_name=None, pos1='', fld1='', pos2='', fld2='', pos3='', fld3='', pos4='', fld4=''):
@@ -210,7 +210,7 @@ class Batter:
 
 
 class Pitcher:
-    def __init__(self, name, position, control, pu, so, gb, fb, bb, b1, b2, hr, pts, ip_limit=None, year=None, set_name=None):
+    def __init__(self, name, position, control, pu, so, gb, fb, bb, b1, b2, hr, pts, ip_out_limit=None, year=None, set_name=None):
         """
         Initializes a pitcher with their attributes and optional year/set info.
 
@@ -227,7 +227,7 @@ class Pitcher:
             b2 (int): Double range end.
             hr (int): Home run range end.
             pts (int): The player's points value.
-            ip_limit (float, optional): The innings pitched limit for this pitcher (can be fractional). Defaults to None.
+            ip_out_limit (float, optional): The innings pitched limit for this pitcher (can be fractional). Defaults to None.
             year (str, optional): The year of the player's card. Defaults to None.
             set_name (str, optional): The set the player belongs to. Defaults to None.
         """
@@ -243,8 +243,7 @@ class Pitcher:
         self.b2 = b2
         self.hr = hr
         self.pts = pts
-        self.ip_limit = ip_limit # Added IP limit attribute
-        self.out_limit = ip_limit*3
+        self.out_limit = ip_out_limit # Added IP limit attribute
         self.year = year # Store year
         self.set = set_name # Store set name
 
@@ -333,7 +332,7 @@ class Pitcher:
         """
         return (f"Pitcher(name='{self.name}', position='{self.position}', control={self.control}, "
                 f"pu={self.pu}, so={self.so}, gb={self.gb}, fb={self.fb}, bb={self.bb}, "
-                f"b1={self.b1}, b2={self.b2}, hr={self.hr}, pts={self.pts}, ip_limit={self.ip_limit}, "
+                f"b1={self.b1}, b2={self.b2}, hr={self.hr}, pts={self.pts}, out_limit={self.out_limit}, "
                 f"year='{self.year}', set_name='{self.set}', team_role='{self.team_role}')")
 
 class Team:
