@@ -7,7 +7,8 @@ import glob # Import glob to find team files
 
 # Import classes and functions from other modules
 from team_management import load_players_from_json, create_random_team, save_team_to_json, load_team_from_json, get_next_team_number # Import team management functions
-from game_logic import play_game, display_linescore, display_boxscore # Import game simulation and display functions
+from game_logic import play_game
+from stats_display import display_linescore, display_boxscore # Import game simulation and display functions
 
 # Define the path for player data and saved teams
 PLAYER_DATA_FILE = 'all_players.json' # Assuming a single JSON file for all players
