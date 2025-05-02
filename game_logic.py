@@ -314,6 +314,7 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
 
     # Update stats and runners based on the result
     if result == "Out":
+        batter.at_bats += 1
         batter.outs += 1
         pitcher.outs_recorded += 1
     elif result == "BB":
