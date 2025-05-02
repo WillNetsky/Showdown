@@ -381,10 +381,7 @@ class Team:
         self.used_closers = []
         self.used_starters = []
 
-        # --- DEBUG PRINT ---
-        #print(f"DEBUG: Team '{self.name}' initialized. Has 'used_starters': {'used_starters' in dir(self)}")
-        # --- END DEBUG PRINT ---
-
+        # Keep track of team stats
 
         # Calculate total team points
         self.total_points = sum(b.pts for b in self.batters) + sum(b.pts for b in self.bench) + sum(p.pts for p in self.all_pitchers)

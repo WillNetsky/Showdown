@@ -5,6 +5,7 @@ import random
 
 # Import necessary classes and constants from other modules
 from entities import Batter, Pitcher, Team # Import Batter, Pitcher, and Team classes
+from constants import OUT_OUTCOMES
 
 def roll_dice(num_dice, sides):
     """
@@ -22,13 +23,13 @@ def roll_dice(num_dice, sides):
         total += random.randint(1, sides)
     return total
 
-def get_chart_result(roll, player, pitcher, good_pitch):
+def get_chart_result(roll, batter, pitcher, good_pitch):
     """
     Determines the result of a matchup based on the dice roll, player stats, and pitch quality.
 
     Args:
         roll (int): The result of the dice roll (1-20).
-        player (Batter): The batter in the matchup.
+        batter (Batter): The batter in the matchup.
         pitcher (Pitcher): The pitcher in the matchup.
         good_pitch (bool): True if the pitch was "good" (pitch_result > batter.on_base), False if "bad).
 
@@ -38,58 +39,67 @@ def get_chart_result(roll, player, pitcher, good_pitch):
     if good_pitch:
         # Use pitcher's chart
         # Determine the outcome based on the roll and pitcher's ranges
-        # Ensure pitcher.out is calculated correctly in Pitcher class
-        if roll <= pitcher.out:
-            return "Out"
-        else:
-            # Calculate the cumulative ranges for hits and walks based on pitcher stats
-            # Note: pitcher.out is the end of the Out range
-            cumulative_range = pitcher.out
-            if roll <= cumulative_range + pitcher.bb:
-                return "BB"
-            cumulative_range += pitcher.bb
-            if roll <= cumulative_range + pitcher.b1:
-                return "1B"
-            cumulative_range += pitcher.b1
-            if roll <= cumulative_range + pitcher.b2:
-                return "2B"
-            cumulative_range += pitcher.b2
-            if roll <= cumulative_range + pitcher.hr:
-                return "HR"
+        if roll <= pitcher.pu:
+            return "PU"
+        cumulative_range = pitcher.pu
+        if roll <= cumulative_range + pitcher.so:
+            return "SO"
+        cumulative_range = cumulative_range + pitcher.so
+        if roll <= cumulative_range + pitcher.gb:
+            return "GB"
+        cumulative_range = cumulative_range + pitcher.gb
+        if roll <= cumulative_range + pitcher.fb:
+            return "FB"
+        cumulative_range = cumulative_range + pitcher.fb
+        # Calculate the cumulative ranges for hits and walks based on pitcher stats
+        if roll <= cumulative_range + pitcher.bb:
+            return "BB"
+        cumulative_range += pitcher.bb
+        if roll <= cumulative_range + pitcher.b1:
+            return "1B"
+        cumulative_range += pitcher.b1
+        if roll <= cumulative_range + pitcher.b2:
+            return "2B"
+        cumulative_range += pitcher.b2
+        if roll <= cumulative_range + pitcher.hr:
+            return "HR"
 
-            # If the roll is higher than the cumulative range for defined results, it's an Out
-            return "Out" # Default to Out if roll doesn't match any defined range
+        # If the roll is higher than the cumulative range for defined results, it's an Out
+        return "Out" # Default to Out if roll doesn't match any defined range
 
     else:
         # Use batter's chart
         # Determine the outcome based on the roll and batter's ranges
-        # Ensure player.out is calculated correctly in Batter class
-        if roll <= player.out:
-            return "Out"
-        else:
-            # Calculate the cumulative ranges for hits and walks based on batter stats
-            # Note: player.out is the end of the Out range
-            cumulative_range = player.out
-            if roll <= cumulative_range + player.bb:
-                return "BB"
-            cumulative_range += player.bb
-            if roll <= cumulative_range + player.b1:
-                return "1B"
-            cumulative_range += player.b1
-            if roll <= cumulative_range + player.b1p:
-                return "1BP"
-            cumulative_range += player.b1p
-            if roll <= cumulative_range + player.b2:
-                return "2B"
-            cumulative_range += player.b2
-            if roll <= cumulative_range + player.b3:
-                return "3B"
-            cumulative_range += player.b3
-            if roll <= cumulative_range + player.hr:
-                return "HR"
+        if roll <= batter.so:
+            return "SO"
+        cumulative_range = batter.so
+        if roll <= cumulative_range + batter.gb:
+            return "GB"
+        cumulative_range = cumulative_range + batter.gb
+        if roll <= cumulative_range + batter.fb:
+            return "FB"
+        cumulative_range = cumulative_range + batter.fb
+        # Calculate the cumulative ranges for hits and walks based on batter stats
+        if roll <= cumulative_range + batter.bb:
+            return "BB"
+        cumulative_range += batter.bb
+        if roll <= cumulative_range + batter.b1:
+            return "1B"
+        cumulative_range += batter.b1
+        if roll <= cumulative_range + batter.b1p:
+            return "1BP"
+        cumulative_range += batter.b1p
+        if roll <= cumulative_range + batter.b2:
+            return "2B"
+        cumulative_range += batter.b2
+        if roll <= cumulative_range + batter.b3:
+            return "3B"
+        cumulative_range += batter.b3
+        if roll <= cumulative_range + batter.hr:
+            return "HR"
 
-            # If the roll is higher than the cumulative range for defined results, it's an Out
-            return "Out" # Default to Out if roll doesn't match any defined range
+        # If the roll is higher than the cumulative range for defined results, it's an Out
+        return "Out" # Default to Out if roll doesn't match any defined range
 
 
 def handle_base_hit(runners, result, current_batter):
@@ -312,10 +322,13 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
     inning_log.append(f"{concise_batter_info} vs. {concise_pitcher_info} ({runners_display}) [Pitch Roll: {pitch_result} ({pitch_quality_text}), Swing Roll: {swing_roll}]: {result}")
 
     # Update stats and runners based on the result
-    if result == "Out":
+    if result in OUT_OUTCOMES:
         batter.at_bats += 1
         batter.outs += 1
         pitcher.outs_recorded += 1
+        if result == "SO":
+            pitcher.strikeouts_thrown += 1
+            batter.strikeouts += 1
     elif result == "BB":
         batter.walks += 1
         pitcher.walks_allowed += 1
@@ -492,7 +505,7 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
 
         # Update pitcher IP *after* the play if it was an out
-        if result == "Out":
+        if result in OUT_OUTCOMES:
             outs += 1
         elif result == "Error": # Handle errors from play_ball
             outs += 1 # Treat unknown results as outs for now
