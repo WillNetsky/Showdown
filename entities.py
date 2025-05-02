@@ -269,7 +269,7 @@ class Pitcher:
         self.walks_allowed = 0
         self.strikeouts_thrown = 0
         self.outs_recorded = 0 # Total outs recorded by this pitcher
-        self.innings_pitched = 0.0 # Track innings pitched
+        #self.innings_pitched = 0.0 # Track innings pitched
         self.home_runs_allowed = 0 # Added attribute to track HR allowed
 
 
@@ -283,7 +283,7 @@ class Pitcher:
         """
         if self.outs_recorded == 0:
             return 0.0
-        return (self.earned_runs_allowed * 9) / self.innings_pitched
+        return (self.earned_runs_allowed * 9) / float(self.outs_recorded/3.0)
 
     def calculate_whip(self):
         """
@@ -293,9 +293,9 @@ class Pitcher:
         Returns:
             float: The WHIP, or 0.0 if innings pitched are zero.
         """
-        if self.innings_pitched == 0:
+        if self.outs_recorded == 0:
             return 0.0
-        return (self.walks_allowed + self.hits_allowed) / self.innings_pitched
+        return (self.walks_allowed + self.hits_allowed) / float(self.outs_recorded/3.0)
 
     def get_formatted_ip(self):
         """

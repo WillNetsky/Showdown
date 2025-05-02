@@ -316,10 +316,7 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
     # Update stats and runners based on the result
     if result == "Out":
         batter.outs += 1
-        # --- CORRECTED: Use outs_recorded instead of total_outs_pitched ---
         pitcher.outs_recorded += 1
-        # --- END CORRECTED ---
-        # IP is updated in play_inning based on outs
     elif result == "BB":
         batter.walks += 1
         pitcher.walks_allowed += 1
@@ -409,15 +406,15 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
     # Check for pitching change right at the start of the inning if the pitcher is already at their limit
     # This handles cases where a pitcher finished the previous inning over their limit
-    if pitcher and pitcher.ip_limit is not None and pitcher.innings_pitched >= pitcher.ip_limit:
-        inning_log.append(f"Pitching Change: {pitcher.name} ({pitcher.innings_pitched:.1f} IP) reached IP limit and is replaced.")
-        # Pass batting_team to handle_pitching_change
-        pitcher = handle_pitching_change(pitching_team, batting_team, inning_number, half_inning, game_state, inning_log)
-        # If handle_pitching_change returns None, the inning cannot continue
-        if pitcher is None:
-             inning_log.append("Error: No pitcher available to start inning.")
-             game_log.extend(inning_log)
-             return 0 # No runs scored if no pitcher
+    # if pitcher and pitcher.out_limit is not None and pitcher.outs_recorded >= pitcher.out_limit:
+    #     inning_log.append(f"Pitching Change: {pitcher.name} ({pitcher.get_formatted_ip():.1f} IP) reached IP limit and is replaced.")
+    #     # Pass batting_team to handle_pitching_change
+    #     pitcher = handle_pitching_change(pitching_team, batting_team, inning_number, half_inning, game_state, inning_log)
+    #     # If handle_pitching_change returns None, the inning cannot continue
+    #     if pitcher is None:
+    #          inning_log.append("Error: No pitcher available to start inning.")
+    #          game_log.extend(inning_log)
+    #          return 0 # No runs scored if no pitcher
 
 
     while outs < 3:
@@ -431,8 +428,8 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
         # --- Check for pitching change BEFORE the plate appearance if facing this batter exceeds limit ---
         # This handles cases where a pitcher is just under their limit and the next batter would push them over
-        if pitcher and pitcher.ip_limit is not None and (pitcher.innings_pitched + (1/3) > pitcher.ip_limit):
-             inning_log.append(f"Pitching Change: {pitcher.name} ({pitcher.innings_pitched:.1f} IP) is replaced to avoid exceeding IP limit.")
+        if pitcher and pitcher.out_limit is not None and (pitcher.outs_recorded >= pitcher.out_limit):
+             inning_log.append(f"Pitching Change: {pitcher.name} ({pitcher.get_formatted_ip():.1f} IP) is replaced to avoid exceeding IP limit.")
              # Pass batting_team to handle_pitching_change
              pitcher = handle_pitching_change(pitching_team, batting_team, inning_number, half_inning, game_state, inning_log)
              # If handle_pitching_change returns None, the inning cannot continue
@@ -465,14 +462,9 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
         # Update pitcher IP *after* the play if it was an out
         if result == "Out":
-            pitcher.innings_pitched += 1/3
-            # Round to one decimal place to avoid floating point issues with thirds
-            pitcher.innings_pitched = round(pitcher.innings_pitched, 1)
             outs += 1
         elif result == "Error": # Handle errors from play_ball
-             outs += 1 # Treat unknown results as outs for now
-             pitcher.innings_pitched += 1/3
-             pitcher.innings_pitched = round(pitcher.innings_pitched, 1)
+            outs += 1 # Treat unknown results as outs for now
 
 
     inning_log.append(f"End of {half_inning} {inning_number}, {runs_scored_this_inning} run(s) scored.")
