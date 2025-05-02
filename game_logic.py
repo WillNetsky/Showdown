@@ -418,7 +418,7 @@ def handle_pitching_change(pitching_team: Team, batting_team: Team, inning_numbe
     return pitching_team.current_pitcher
 
 
-def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log, half_inning, game_state):
+def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log, half_inning, game_state, num_innings):
     """
     Simulates a single inning of a game.
 
@@ -491,16 +491,15 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
         # --- Check for Walk-Off ---
         # If it's the bottom of the 9th or later, and the home team (batting_team) takes the lead
-        if half_inning == "Bottom" and inning_number >= 9:
-            # Calculate the potential score if the current runs scored are added
-            batting_team_potential_score = game_state[batting_team.name] + runs_scored_this_inning
+        if half_inning == "Bottom" and inning_number >= num_innings:
+            # Calculate the new score if the current runs scored are added
+            batting_team_new_score = game_state[batting_team.name] + runs_scored_this_inning
             pitching_team_current_score = game_state[pitching_team.name]
 
-            if batting_team_potential_score > pitching_team_current_score:
+            if batting_team_new_score > pitching_team_current_score:
                 inning_log.append(f"Walk-Off {result}!")
                 # Update the game state with the runs scored *before* ending the inning
                 game_state[batting_team.name] += runs_scored_this_inning
-                runs_scored_this_inning = 0 # Reset runs for the inning as they've been added to game_state
                 break # End the inning immediately on a walk-off
 
 
@@ -514,7 +513,7 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
     inning_log.append(f"End of {half_inning} {inning_number}, {runs_scored_this_inning} run(s) scored.")
     # Only add runs_scored_this_inning to game_state here if it wasn't a walk-off
     # In a walk-off, runs were added to game_state within the walk-off check
-    if not (half_inning == "Bottom" and inning_number >= 9 and game_state[batting_team.name] > game_state[pitching_team.name]):
+    if not (half_inning == "Bottom" and inning_number >= num_innings and game_state[batting_team.name] > game_state[pitching_team.name]):
          print(str(batting_team.name) + ": " + str(runs_scored_this_inning))
          game_state[batting_team.name] += runs_scored_this_inning
 
@@ -574,7 +573,7 @@ def play_game(team1: Team, team2: Team, num_innings=9):
     game_over = False
     while not game_over:
         # Top of the inning: Team 1 bats, Team 2 pitches
-        runs_team1_this_inning = play_inning(team1, team2, current_inning, game_log, "Top", game_state)
+        runs_team1_this_inning = play_inning(team1, team2, current_inning, game_log, "Top", game_state, num_innings)
         team1_inning_runs.append(runs_team1_this_inning) # Record runs for the inning
 
         # Check for game end after the top of the 9th or later if the away team is ahead
@@ -590,7 +589,7 @@ def play_game(team1: Team, team2: Team, num_innings=9):
         # AND (it's before the 9th inning OR the score is tied OR the home team is trailing)
         runs_team2_this_inning = 0 # Initialize runs for the bottom half
         if not game_over and (current_inning < num_innings or game_state[team2.name] <= game_state[team1.name]):
-             runs_team2_this_inning = play_inning(team2, team1, current_inning, game_log, "Bottom", game_state)
+             runs_team2_this_inning = play_inning(team2, team1, current_inning, game_log, "Bottom", game_state, num_innings)
         team2_inning_runs.append(runs_team2_this_inning) # Record runs for the inning
 
 
@@ -631,88 +630,3 @@ def play_game(team1: Team, team2: Team, num_innings=9):
 
 
     return game_state[team1.name], game_state[team2.name], game_log, team1_inning_runs, team2_inning_runs
-
-# def display_linescore(team1_name, team2_name, team1_inning_runs, team2_inning_runs, final_score1, final_score2):
-#     """
-#     Prints a formatted linescore for the game.
-#
-#     Args:
-#         team1_name (str): Name of the first team (Away).
-#         team2_name (str): Name of the second team (Home).
-#         team1_inning_runs (list): List of runs scored by team1 in each inning.
-#         team2_inning_runs (list): List of runs scored by team2 in each inning.
-#         final_score1 (int): Final score for team1.
-#         final_score2 (int): Final score for team2.
-#     """
-#     print("\n--- Linescore ---")
-#
-#     # Determine the maximum number of innings played
-#     max_innings = max(len(team1_inning_runs), len(team2_inning_runs))
-#
-#     # Determine the max team name length
-#     max_team_length = max(len(team1_name), len(team2_name))
-#
-#     # Create the header row
-#     header = ["Team"+" "*(max_team_length-4)] + [str(i + 1) for i in range(max_innings)] + ["R", "H"] # Add H column placeholder
-#     print(" | ".join(header))
-#     print("-" * (len(" | ".join(header)) + 2)) # Separator line
-#
-#     # Print Team 1 (Away) row
-#     team1_row = [team1_name] + [str(runs) for runs in team1_inning_runs]
-#     # Pad with empty strings if fewer than max_innings
-#     team1_row += [""] * (max_innings - len(team1_inning_runs))
-#     team1_row += [str(final_score1), "?"] # Add R and H (H is placeholder for now)
-#     print(" | ".join(team1_row))
-#
-#     # Print Team 2 (Home) row
-#     team2_row = [team2_name] + [str(runs) for runs in team2_inning_runs]
-#     # Pad with empty strings if fewer than max_innings
-#     team2_row += [""] * (max_innings - len(team2_inning_runs))
-#     team2_row += [str(final_score2), "?"] # Add R and H (H is placeholder for now)
-#     print(" | ".join(team2_row))
-#     print("-" * (len(" | ".join(header)) + 2)) # Separator line
-#
-#
-# def display_boxscore(team: Team):
-#     """
-#     Prints a formatted boxscore for a given team.
-#
-#     Args:
-#         team (Team): The Team object to display the boxscore for.
-#     """
-#     print(f"\n--- {team.name} Boxscore ---")
-#
-#     # Batting Stats Header
-#     # Added OPS+ column placeholder
-#     print("\nBatting:")
-#     # Adjusted spacing for batting stats
-#     print(f"{'Name':<20} {'Pos':<5} {'PA':<3} {'AB':<3} {'R':<3} {'H':<3} {'RBI':<3} {'BB':<3} {'SO':<4} {'AVG':<4} {'OBP':<4} {'SLG':<4} {'OPS':<4}")
-#     print("-" * 79) # Adjusted separator length
-#
-#     # Display Batting Stats for Starters and Bench
-#     for player in team.batters + team.bench:
-#         # Calculate derived stats
-#         avg = player.calculate_avg()
-#         obp = player.calculate_obp()
-#         slg = player.calculate_slg()
-#         ops = player.calculate_ops()
-#
-#         # Format and print batting stats
-#         print(f"{player.name:<20} {player.position:<5} {player.plate_appearances:<3} {player.at_bats:<3} {player.runs_scored:<3} {player.hits:<3} {player.rbi:<3} {player.walks:<3} {player.strikeouts:<3} {avg} {obp} {slg} {ops}")
-#
-#     # Pitching Stats Header
-#     print("\nPitching:")
-#     # Adjusted spacing for pitching stats
-#     print(f"{'Name':<20} {'Role':<5} {'IP':<5} {'BF':<4} {'R':<3} {'ER':<3} {'H':<3} {'BB':<3} {'SO':<3} {'ERA':<5} {'WHIP':<5}")
-#     print("-" * 70) # Adjusted separator length
-#
-#     # Display Pitching Stats for all Pitchers
-#     for pitcher in team.used_starters+team.used_relievers+team.used_closers:
-#         # Calculate derived stats
-#         era = pitcher.calculate_era()
-#         whip = pitcher.calculate_whip()
-#         formatted_ip = pitcher.get_formatted_ip() # Use the formatted IP
-#
-#         # Format and print pitching stats
-#         print(f"{pitcher.name:<20} {pitcher.team_role:<5} {formatted_ip:<5} {pitcher.batters_faced:<4} {pitcher.runs_allowed:<3} {pitcher.earned_runs_allowed:<3} {pitcher.hits_allowed:<3} {pitcher.walks_allowed:<3} {pitcher.strikeouts_thrown:<3} {era:<5.2f} {whip:<5.2f}")
-#
