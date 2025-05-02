@@ -129,13 +129,13 @@ class Batter:
         Calculates the batting average (Hits / At-Bats).
 
         Returns:
-            float: The batting average, or 0.0 if at-bats are zero.
+            string: The batting average, or .000 if at-bats are zero.
         """
         # Calculate total hits
         self.hits = self.singles + self.doubles + self.triples + self.home_runs
         if self.at_bats == 0:
-            return 0.0
-        return self.hits / self.at_bats
+            return ".000"
+        return "{:.3f}".format(self.hits / self.at_bats)[1:]
 
     def calculate_obp(self):
         """
@@ -143,14 +143,14 @@ class Batter:
         OBP = (Hits + Walks) / (At-bats + Walks)
 
         Returns:
-            float: The OBP, or 0.0 if the denominator is zero.
+            str: The OBP, or .000 if the denominator is zero.
         """
         denominator = self.at_bats + self.walks
         if denominator == 0:
-            return 0.0
+            return ".000"
         # Ensure hits is calculated before using it
         self.hits = self.singles + self.doubles + self.triples + self.home_runs
-        return (self.hits + self.walks) / denominator
+        return "{:.3f}".format((self.hits + self.walks) / denominator)[1:]
 
     def calculate_slg(self):
         """
@@ -159,12 +159,12 @@ class Batter:
         Total Bases = (Singles * 1) + (Doubles * 2) + (Triples * 3) + (Home Runs * 4)
 
         Returns:
-            float: The SLG, or 0.0 if at-bats are zero.
+            str: The SLG, or .000 if at-bats are zero.
         """
         if self.at_bats == 0:
-            return 0.0
+            return ".000"
         total_bases = (self.singles * 1) + (self.doubles * 2) + (self.triples * 3) + (self.home_runs * 4)
-        return total_bases / self.at_bats
+        return "{:.3f}".format(total_bases / self.at_bats)[1:]
 
     def calculate_ops(self):
         """
@@ -172,9 +172,9 @@ class Batter:
         OPS = OBP + SLG
 
         Returns:
-            float: The OPS.
+            str: The OPS.
         """
-        return self.calculate_obp() + self.calculate_slg()
+        return "{:.3f}".format(float(self.calculate_obp()) + float(self.calculate_slg()))[1:]
 
 
     def __str__(self):
