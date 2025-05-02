@@ -691,7 +691,7 @@ def display_boxscore(team: Team):
         ops = player.calculate_ops()
 
         # Format and print batting stats
-        print(f"{player.name:<20} {player.position:<5} {player.plate_appearances:<3} {player.at_bats:<3} {player.runs_scored:<3} {player.hits:<3} {player.rbi:<3} {player.walks:<3} {player.strikeouts:<3} {avg:<5.3f} {obp:<5.3f} {slg:<5.3f} {ops:<5.3f}")
+        print(f"{player.name:<20} {player.position:<5} {player.plate_appearances:<3} {player.at_bats:<3} {player.runs_scored:<3} {player.hits:<3} {player.rbi:<3} {player.walks:<3} {player.strikeouts:<3} {avg} {obp} {slg} {ops}")
 
     # Pitching Stats Header
     print("\nPitching:")
