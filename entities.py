@@ -366,8 +366,9 @@ class Team:
         self.all_pitchers = starters + relievers + closers
         # Set the initial current pitcher - prefer SP, then RP, then CL
         self.current_pitcher = None
+        self.starter_index = 0
         if self.starters:
-            self.current_pitcher = self.starters[0]
+            self.current_pitcher = self.starters[self.starter_index]
         elif self.relievers:
             self.current_pitcher = self.relievers[0]
         elif self.closers:

@@ -549,7 +549,9 @@ def play_game(team1: Team, team2: Team, num_innings=9):
 
     # Set the initial starting pitchers for each team
     if team1.starters:
-        team1.current_pitcher = team1.starters[0]
+        team1.current_pitcher = team1.starters[team1.starter_index]
+        team1.starter_index += 1
+        team1.starter_index = team1.starter_index % 4
         # Ensure used_starters is initialized (should be in Team.__init__)
         if not hasattr(team1, 'used_starters'):
              team1.used_starters = []
@@ -559,7 +561,9 @@ def play_game(team1: Team, team2: Team, num_innings=9):
         team1.current_pitcher = None # Ensure it's None if no SPs
 
     if team2.starters:
-        team2.current_pitcher = team2.starters[0]
+        team2.current_pitcher = team2.starters[team2.starter_index]
+        team2.starter_index += 1
+        team2.starter_index = team2.starter_index % 4
         # Ensure used_starters is initialized (should be in Team.__init__)
         if not hasattr(team2, 'used_starters'):
              team2.used_starters = []
