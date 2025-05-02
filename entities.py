@@ -383,6 +383,8 @@ class Team:
         self.used_starters = []
 
         # Keep track of team stats
+        self.wins = 0
+        self.losses = 0
 
         # Calculate total team points
         self.total_points = sum(b.pts for b in self.batters) + sum(b.pts for b in self.bench) + sum(p.pts for p in self.all_pitchers)
@@ -436,3 +438,13 @@ class Team:
                 available_pool.append(reliever)
 
         return available_pool
+
+    def post_game_team_cleanup(self):
+        self.current_batter_index = 0  # Index of the next batter in the lineup
+
+        # Keep track of which relievers/closers have already pitched
+        self.used_relievers = []
+        self.used_closers = []
+        self.used_starters = []
+        for pitcher in self.all_pitchers:
+            pitcher.outs_recorded = 0

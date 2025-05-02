@@ -320,7 +320,7 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
 
     # Include roll values and pitch quality in the log entry
     inning_log.append(f"{concise_batter_info} vs. {concise_pitcher_info} ({runners_display}) [Pitch Roll: {pitch_result} ({pitch_quality_text}), Swing Roll: {swing_roll}]: {result}")
-
+    # print((f"{concise_batter_info} vs. {concise_pitcher_info} ({runners_display}) [Pitch Roll: {pitch_result} ({pitch_quality_text}), Swing Roll: {swing_roll}]: {result}"))
     # Update stats and runners based on the result
     if result in OUT_OUTCOMES:
         batter.at_bats += 1
@@ -370,6 +370,7 @@ def play_ball(batter: Batter, pitcher: Pitcher, inning_log, runners):
     else:
         # Handle unexpected results as outs for now
         inning_log.append(f"Warning: Unhandled result '{result}' for {batter.name}. Treating as Out.")
+        # print(f"Warning: Unhandled result '{result}' for {batter.name}. Treating as Out.")
         result = "Out"
         batter.outs += 1
 
@@ -411,9 +412,11 @@ def handle_pitching_change(pitching_team: Team, batting_team: Team, inning_numbe
 
         pitching_team.used_relievers.append(next_pitcher)
         inning_log.append(f"Pitching Change: {pitching_team.current_pitcher.name} enters the game (Reliever).")
+        # print((f"Pitching Change: {pitching_team.current_pitcher.name} enters the game (Reliever)."))
     else:
         inning_log.append("Error: No available relievers or closers for pitching change.")
-        pitching_team.current_pitcher = None # No pitcher available
+        # print(("Error: No available relievers or closers for pitching change."))
+        #pitching_team.current_pitcher = None # No pitcher available
 
     return pitching_team.current_pitcher
 
@@ -440,11 +443,13 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
     inning_log = [] #use inning log to track events, then add to game log
 
     inning_log.append(f"--- {half_inning} of the {inning_number} Inning ---")
+    # print((f"--- {half_inning} of the {inning_number} Inning ---"))
 
     # Get the current pitcher at the start of the inning
     pitcher = pitching_team.current_pitcher
     if pitcher is None:
         inning_log.append("Error: Pitcher not available for pitching team at start of inning.")
+        # print("Error: Pitcher not available for pitching team at start of inning.")
         game_log.extend(inning_log)
         return 0 # No runs scored if no pitcher
 
@@ -452,11 +457,13 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
     # This handles cases where a pitcher finished the previous inning over their limit
     if pitcher and pitcher.out_limit is not None and pitcher.outs_recorded >= pitcher.out_limit:
         inning_log.append(f"Pitching Change: {pitcher.name} ({pitcher.outs_recorded:.1f} Outs) reached IP limit and is replaced.")
+        # print(f"Pitching Change: {pitcher.name} ({pitcher.outs_recorded:.1f} Outs) reached IP limit and is replaced.")
         # Pass batting_team to handle_pitching_change
         pitcher = handle_pitching_change(pitching_team, batting_team, inning_number, half_inning, game_state, inning_log)
         # If handle_pitching_change returns None, the inning cannot continue
         if pitcher is None:
              inning_log.append("Error: No pitcher available to start inning.")
+             # print("Error: No pitcher available to start inning.")
              game_log.extend(inning_log)
              return 0 # No runs scored if no pitcher
 
@@ -474,11 +481,13 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
         # This handles cases where a pitcher is just under their limit and the next batter would push them over
         if pitcher and pitcher.out_limit is not None and (pitcher.outs_recorded > pitcher.out_limit):
              inning_log.append(f"Pitching Change: {pitcher.name} ({pitcher.outs_recorded:.1f} IP) is replaced to avoid exceeding IP limit.")
+             # print(f"Pitching Change: {pitcher.name} ({pitcher.outs_recorded:.1f} IP) is replaced to avoid exceeding IP limit.")
              # Pass batting_team to handle_pitching_change
              pitcher = handle_pitching_change(pitching_team, batting_team, inning_number, half_inning, game_state, inning_log)
              # If handle_pitching_change returns None, the inning cannot continue
              if pitcher is None:
                   inning_log.append("Error: No pitcher available to continue inning.")
+                  # print("Error: No pitcher available to continue inning.")
                   break # End the inning if no pitchers available
 
         # If pitcher is None after the proactive check, break the loop
@@ -498,6 +507,7 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
             if batting_team_new_score > pitching_team_current_score:
                 inning_log.append(f"Walk-Off {result}!")
+                # print(f"Walk-Off {result}!")
                 # Update the game state with the runs scored *before* ending the inning
                 game_state[batting_team.name] += runs_scored_this_inning
                 break # End the inning immediately on a walk-off
@@ -511,10 +521,10 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
 
 
     inning_log.append(f"End of {half_inning} {inning_number}, {runs_scored_this_inning} run(s) scored.")
+    # print(f"End of {half_inning} {inning_number}, {runs_scored_this_inning} run(s) scored.")
     # Only add runs_scored_this_inning to game_state here if it wasn't a walk-off
     # In a walk-off, runs were added to game_state within the walk-off check
     if not (half_inning == "Bottom" and inning_number >= num_innings and game_state[batting_team.name] > game_state[pitching_team.name]):
-         print(str(batting_team.name) + ": " + str(runs_scored_this_inning))
          game_state[batting_team.name] += runs_scored_this_inning
 
 
@@ -546,6 +556,7 @@ def play_game(team1: Team, team2: Team, num_innings=9):
     team2_inning_runs = []
 
     game_log.append(f"--- Game Start: {team1.name} vs. {team2.name} ---")
+    # print(f"--- Game Start: {team1.name} vs. {team2.name} ---")
 
     # Set the initial starting pitchers for each team
     if team1.starters:
@@ -558,6 +569,7 @@ def play_game(team1: Team, team2: Team, num_innings=9):
         team1.used_starters.append(team1.current_pitcher)
     else:
         game_log.append(f"Warning: {team1.name} has no starting pitchers.")
+        # print(f"Warning: {team1.name} has no starting pitchers.")
         team1.current_pitcher = None # Ensure it's None if no SPs
 
     if team2.starters:
@@ -570,6 +582,7 @@ def play_game(team1: Team, team2: Team, num_innings=9):
         team2.used_starters.append(team2.current_pitcher)
     else:
          game_log.append(f"Warning: {team2.name} has no starting pitchers.")
+         # print(f"Warning: {team2.name} has no starting pitchers.")
          team2.current_pitcher = None # Ensure it's None if no SPs
 
 
@@ -583,6 +596,7 @@ def play_game(team1: Team, team2: Team, num_innings=9):
         # Check for game end after the top of the 9th or later if the away team is ahead
         if current_inning >= num_innings and game_state[team2.name] > game_state[team1.name]:
             game_log.append(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
+            # print(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
             game_over = True
             # Add 0 runs for the bottom of the inning if it wasn't played
             team2_inning_runs.append("-")
@@ -604,12 +618,14 @@ def play_game(team1: Team, team2: Team, num_innings=9):
              # Check if the last entry in the log was NOT a walk-off before adding the game end message
              if not game_log or not game_log[-1].startswith("Walk-Off"):
                  game_log.append(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
+                 # print(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
              game_over = True
              break # End the game
 
         # If the game is still tied after the bottom of the 9th or later, continue to the next inning
         if current_inning >= num_innings and game_state[team1.name] == game_state[team2.name]:
             game_log.append(f"--- Score tied {game_state[team1.name]}-{game_state[team2.name]} after {current_inning} innings. Going to extra innings. ---")
+            # print(f"--- Score tied {game_state[team1.name]}-{game_state[team2.name]} after {current_inning} innings. Going to extra innings. ---")
             current_inning += 1
             continue # Continue to the next inning
 
@@ -618,6 +634,7 @@ def play_game(team1: Team, team2: Team, num_innings=9):
         # However, as a safeguard, explicitly check here too.
         if current_inning >= num_innings and game_state[team2.name] > game_state[team1.name]:
              game_log.append(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
+             # print(f"--- Game End: {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
              game_over = True
              break # End the game
 
@@ -630,6 +647,7 @@ def play_game(team1: Team, team2: Team, num_innings=9):
         # Fallback to end the game if none of the above conditions were met (shouldn't happen with correct logic)
         if not game_over:
              game_log.append(f"--- Game End (Fallback): {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
+             # print(f"--- Game End (Fallback): {team1.name} {game_state[team1.name]} - {team2.name} {game_state[team2.name]} ---")
              game_over = True
 
 
