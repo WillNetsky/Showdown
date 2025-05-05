@@ -6,14 +6,14 @@ from constants import POSITION_MAPPING # Import POSITION_MAPPING
 
 
 class Batter:
-    def __init__(self, name, position, onbase, so, gb, fb, bb ,b1, b1p, b2, b3, hr, pts, year=None, set_name=None, pos1='', fld1='', pos2='', fld2='', pos3='', fld3='', pos4='', fld4=''):
+    def __init__(self, name, position, on_base, so, gb, fb, bb ,b1, b1p, b2, b3, hr, pts, year=None, set_name=None, pos1='', fld1='', pos2='', fld2='', pos3='', fld3='', pos4='', fld4=''):
         """
         Initializes a batter with their attributes and optional year/set info.
 
         Args:
             name (str): The name of the player.
             position (str): The primary position of the player (raw string from data).
-            onbase (int): The player's On-Base number.
+            on_base (int): The player's On-Base number.
             so (int): Strikeout range end.
             gb (int): Ground ball range end.
             fb (int): Fly ball range end.
@@ -37,7 +37,7 @@ class Batter:
         """
         self.name = name
         self.position = position # Store the raw primary position string from data (defensive position)
-        self.on_base = onbase
+        self.on_base = on_base
         self.so = so
         self.gb = gb
         self.fb = fb
@@ -46,6 +46,11 @@ class Batter:
         self.b1p = b1p
         self.b2 = b2
         self.b3 = b3
+        # Cap HR at 20 based on original comment logic
+        if hr > 20:
+            self.hr = 0
+        else:
+            self.hr = hr
         self.pts = pts
         self.year = year # Store year
         self.set = set_name # Store set name
@@ -59,18 +64,13 @@ class Batter:
         self.pos4 = pos4
         self.fld4 = fld4
 
-        # --- Added team_role attribute ---
         self.team_role = None # Will be set when added to a team roster (e.g., 'Starter', 'Bench')
-        # --- End added attribute ---
+        self.team_name = ""
 
 
-        # Cap HR at 20 based on original comment logic
-        if hr > 20:
-            self.hr = 0
-        else:
-            self.hr = hr
+
         # Calculate the 'Out' range end based on SO, GB, FB
-        self.out = so + gb + fb
+        #self.out = so + gb + fb
 
         # Stats to track during the game
         self.plate_appearances = 0
@@ -86,6 +86,33 @@ class Batter:
         self.outs = 0 # Total outs recorded by this batter
         self.hits = 0 # Combined hits stat - Will be calculated based on singles, doubles, triples, HR
 
+        # Stats to track all-time
+        self.pa_alltime = 0
+        self.ab_alltime = 0
+        self.r_alltime = 0
+        self.rbi_alltime = 0
+        self.singles_alltime = 0
+        self.doubles_alltime = 0
+        self.triples_alltime = 0
+        self.home_runs_alltime = 0
+        self.walks_alltime = 0
+        self.strikeouts_alltime = 0
+        self.outs_alltime = 0
+        self.hits_alltime = 0
+
+    def alltime_stats_update(self):
+        self.pa_alltime += self.plate_appearances
+        self.ab_alltime += self.at_bats
+        self.r_alltime += self.runs_scored
+        self.rbi_alltime += self.rbi
+        self.singles_alltime += self.singles
+        self.doubles_alltime += self.doubles
+        self.triples_alltime += self.triples
+        self.home_runs_alltime += self.home_runs
+        self.walks_alltime += self.walks
+        self.strikeouts_alltime += self.strikeouts
+        self.outs_alltime += self.outs
+        self.hits_alltime += self.hits
 
     def can_play(self, required_position):
         """
@@ -137,6 +164,18 @@ class Batter:
             return ".000"
         return "{:.3f}".format(self.hits / self.at_bats)[1:]
 
+    def calculate_avg_alltime(self):
+        """
+        Calculates the batting average (Hits / At-Bats).
+
+        Returns:
+            string: The batting average, or .000 if at-bats are zero.
+        """
+        # Calculate total hits
+        self.hits_alltime = self.singles_alltime + self.doubles_alltime + self.triples_alltime + self.home_runs_alltime
+        if self.ab_alltime == 0:           return ".000"
+        return "{:.3f}".format(self.hits_alltime / self.ab_alltime)[1:]
+
     def calculate_obp(self):
         """
         Calculates the On-base Percentage (OBP).
@@ -152,6 +191,21 @@ class Batter:
         self.hits = self.singles + self.doubles + self.triples + self.home_runs
         return "{:.3f}".format((self.hits + self.walks) / denominator)[1:]
 
+    def calculate_obp_alltime(self):
+        """
+        Calculates the On-base Percentage (OBP).
+        OBP = (Hits + Walks) / (At-bats + Walks)
+
+        Returns:
+            str: The OBP, or .000 if the denominator is zero.
+        """
+        denominator = self.ab_alltime + self.walks_alltime
+        if denominator == 0:
+            return ".000"
+        # Ensure hits is calculated before using it
+        self.hits_alltime = self.singles_alltime + self.doubles_alltime + self.triples_alltime + self.home_runs_alltime
+        return "{:.3f}".format((self.hits_alltime + self.walks_alltime) / denominator)[1:]
+
     def calculate_slg(self):
         """
         Calculates the Slugging Percentage (SLG).
@@ -166,6 +220,20 @@ class Batter:
         total_bases = (self.singles * 1) + (self.doubles * 2) + (self.triples * 3) + (self.home_runs * 4)
         return "{:.3f}".format(total_bases / self.at_bats)[1:]
 
+    def calculate_slg_alltime(self):
+        """
+        Calculates the Slugging Percentage (SLG).
+        SLG = Total Bases / At-bats
+        Total Bases = (Singles * 1) + (Doubles * 2) + (Triples * 3) + (Home Runs * 4)
+
+        Returns:
+            str: The SLG, or .000 if at-bats are zero.
+        """
+        if self.ab_alltime == 0:
+            return ".000"
+        total_bases_alltime = (self.singles_alltime * 1) + (self.doubles_alltime * 2) + (self.triples_alltime * 3) + (self.home_runs_alltime * 4)
+        return "{:.3f}".format(total_bases_alltime / self.ab_alltime)[1:]
+
     def calculate_ops(self):
         """
         Calculates the On-base Plus Slugging (OPS).
@@ -176,6 +244,15 @@ class Batter:
         """
         return "{:.3f}".format(float(self.calculate_obp()) + float(self.calculate_slg()))[1:]
 
+    def calculate_ops(self):
+        """
+        Calculates the On-base Plus Slugging (OPS).
+        OPS = OBP + SLG
+
+        Returns:
+            str: The OPS.
+        """
+        return "{:.3f}".format(float(self.calculate_obp_alltime()) + float(self.calculate_slg_alltime()))[1:]
 
     def __str__(self):
         """
@@ -247,10 +324,9 @@ class Pitcher:
         self.year = year # Store year
         self.set = set_name # Store set name
 
-        # --- Added team_role attribute ---
-        self.team_role = None # Will be set when added to a team roster (e.g., 'SP', 'RP', 'CL')
-        # --- End added attribute ---
 
+        self.team_role = None # Will be set when added to a team roster (e.g., 'SP', 'RP', 'CL')
+        self.team_name = ""
 
         # Cap HR at 20 based on original comment logic
         if hr > 20:
@@ -268,9 +344,27 @@ class Pitcher:
         self.walks_allowed = 0
         self.strikeouts_thrown = 0
         self.outs_recorded = 0 # Total outs recorded by this pitcher
-        #self.innings_pitched = 0.0 # Track innings pitched
         self.home_runs_allowed = 0 # Added attribute to track HR allowed
 
+        # Stats to track all_time
+        self.batters_faced_alltime = 0
+        self.runs_allowed_alltime = 0
+        self.earned_runs_allowed_alltime = 0
+        self.hits_allowed_alltime = 0
+        self.walks_allowed_alltime = 0
+        self.strikeouts_thrown_alltime = 0
+        self.outs_recorded_alltime = 0
+        self.home_runs_allowed_alltime = 0
+
+    def alltime_stats_update(self):
+        self.batters_faced_alltime += self.batters_faced
+        self.runs_allowed_alltime += self.runs_allowed_alltime
+        self.earned_runs_allowed_alltime += self.earned_runs_allowed_alltime
+        self.hits_allowed_alltime += self.hits_allowed_alltime
+        self.walks_allowed_alltime += self.walks_allowed_alltime
+        self.strikeouts_thrown_alltime += self.strikeouts_thrown
+        self.outs_recorded_alltime += self.outs_recorded
+        self.home_runs_allowed_alltime += self.home_runs_allowed_alltime
 
     def calculate_era(self):
         """
@@ -308,6 +402,8 @@ class Pitcher:
         fractional_part = self.outs_recorded % 3
 
         return str(whole_innings)+"."+str(fractional_part)
+
+
 
 
     def __str__(self):
@@ -385,6 +481,11 @@ class Team:
         # Keep track of team stats
         self.wins = 0
         self.losses = 0
+        self.win_pct = "0.0"
+        self.wins_all_time = 0
+        self.losses_all_time = 0
+        self.win_pct_all_time = "0.0"
+        self.elo_rating = 1500
 
         # Calculate total team points
         self.total_points = sum(b.pts for b in self.batters) + sum(b.pts for b in self.bench) + sum(p.pts for p in self.all_pitchers)
@@ -446,5 +547,24 @@ class Team:
         self.used_relievers = []
         self.used_closers = []
         self.used_starters = []
+
         for pitcher in self.all_pitchers:
             pitcher.outs_recorded = 0
+            pitcher.team_name = self.name
+            pitcher.alltime_stats_update()
+        for batter in self.batters:
+            batter.team_name = self.name
+            batter.alltime_stats_update()
+
+    def get_win_pct(self):
+        self.win_pct = "{:.3%}".format(float(self.wins/(self.wins+self.losses)))
+        self.win_pct_all_time = "{:.3%}".format(float(self.wins_all_time/(self.wins_all_time + self.losses_all_time)))
+
+    def post_season_stats_update(self):
+        self.wins_all_time += self.wins
+        self.losses_all_time += self.losses
+        self.get_win_pct()
+
+    def preseason_stats_update(self):
+        self.wins = 0
+        self.losses = 0

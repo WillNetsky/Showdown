@@ -440,7 +440,9 @@ def create_random_team(all_players, team_name, min_points=MIN_TEAM_POINTS, max_p
 
              # Check if the team's total points are within the allowed range
              if min_points <= current_total_points <= max_points:
-                 print(f"Successfully created team {team_name} with {current_total_points} points.") # Debug print restored
+                 #print(f"Successfully created team {team_name} with {current_total_points} points.") # Debug print restored
+                 for player in selected_starters + selected_sps + selected_rps + selected_cls:
+                     player.team_name = team_name
                  return Team(team_name, selected_starters, selected_sps, selected_rps, selected_cls, selected_bench)
              else:
                  #print(f"Attempt {attempt+1}: Team points {current_total_points} outside range [{min_points}, {max_points}]. Retrying...") # Debug print restored
@@ -602,7 +604,7 @@ def save_team_to_json(team: Team, filepath: str):
         with open(filepath, mode='w', encoding='utf-8') as outfile:
             json.dump(team_data, outfile, indent=4) # Use indent for readability
 
-        print(f"Team '{team.name}' saved to {filepath}")
+        #print(f"Team '{team.name}' saved to {filepath}")
 
     except Exception as e:
         print(f"Error saving team '{team.name}' to {filepath}: {e}")
