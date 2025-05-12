@@ -30,33 +30,131 @@ def load_player_json(player_json_file):
     print(f"Successfully loaded {len(all_players)} players.")
     return all_players
 
-def play_series(team_1: Team, team_2: Team):
-    for i in range(1, 5):
-        away_score, home_score, game_log, team1_inning_runs, team2_inning_runs = play_game(team_2, team_1)
 
-        team_1.post_game_team_cleanup()
-        team_2.post_game_team_cleanup()
+def play_series(team_1: Team, team_2: Team, series_number: int, total_series: int, log_callback=None):
+    """
+    Simulates a series of games between two teams.
+    Your original tournament.py play_series had a loop for 4 games.
+    This version assumes play_game is called 4 times.
+    Args:
+        team_1 (Team): One team.
+        team_2 (Team): The other team.
+        series_number (int): Current series number for logging.
+        total_series (int): Total number of series for logging.
+        log_callback (function, optional): Function to call for logging messages.
+    """
+    if log_callback:
+        log_callback(f"Series {series_number}/{total_series}: {team_1.name} vs {team_2.name} (4 games)")
 
-def preseason(teams):
-    # Preseason
+    num_games_in_series = 4  # As per your original loop: for i in range(1, 5)
+
+    for i in range(1, num_games_in_series + 1):
+        # Determine home and away. Your original play_series had team_2, team_1 in play_game.
+        # This implies team_2 was home, team_1 was away for that specific setup.
+        # Let's make it explicit for clarity in this example.
+        # For a balanced series, you might alternate home team or have a fixed home team for the series.
+        # Here, we'll alternate for demonstration within the 4 games.
+        if i <= num_games_in_series / 2:  # First half of series, team_1 is away
+            away_team, home_team = team_1, team_2
+        else:  # Second half of series, team_2 is away
+            away_team, home_team = team_2, team_1
+
+        if log_callback:
+            log_callback(
+                f"  Starting game {i} of series {series_number}: {away_team.name} (Away) vs {home_team.name} (Home)")
+
+        # Call play_game. Ensure it's imported and works as expected.
+        # The play_game function returns: away_result, home_result, game_log, away_inning_runs, home_inning_runs
+        away_result, home_result, game_log_entries, _, _ = play_game(away_team, home_team)
+
+        if log_callback:
+            final_score_info = "Score N/A"
+            # Attempt to get score from game results or log
+            if away_result and home_result:
+                final_score_info = f"Score: {away_team.name} {away_result.get('runs_scored', 0)} - {home_team.name} {home_result.get('runs_scored', 0)}"
+            elif game_log_entries and isinstance(game_log_entries[-1], str) and (
+                    "--- Game End" in game_log_entries[-1] or "Walk-Off" in game_log_entries[-1]):
+                # Try to parse from a common game end log message format
+                final_score_info = game_log_entries[-1].split("---")[1].strip() if "--- Game End" in game_log_entries[
+                    -1] else game_log_entries[-1]
+
+            log_callback(f"  Game {i} of series {series_number} End. {final_score_info}")
+
+        # Call post_game_team_cleanup for the actual teams involved in the game
+        away_team.post_game_team_cleanup()
+        home_team.post_game_team_cleanup()
+
+    if log_callback:
+        log_callback(f"Completed Series {series_number} between {team_1.name} and {team_2.name}.")
+
+
+def play_season(teams, log_callback=None):  # Added log_callback parameter
+    """
+    Simulates a full season where teams play each other.
+    Args:
+        teams (list): List of Team objects.
+        log_callback (function, optional): Function to call for logging messages.
+    """
+    if log_callback:
+        log_callback("Beginning of season play...")
+
+    team_pairs = list(itertools.combinations(teams, 2))
+
+    # Calculate total number of series sets (each pair plays "home and home" series)
+    total_series_sets = len(team_pairs)
+    current_series_set_count = 0
+
+    # Each "series set" consists of team_1 hosting team_2, and team_2 hosting team_1
+    # If play_series handles 4 games with fixed home/away, then two calls to play_series are needed per pair.
+    # The series_number should be unique for each 4-game block.
+
+    series_counter = 0  # Overall counter for individual 4-game series
+
+    for team_1, team_2 in team_pairs:
+        current_series_set_count += 1
+        if log_callback:
+            log_callback(
+                f"--- Simulating Series Set {current_series_set_count}/{total_series_sets} for {team_1.name} and {team_2.name} ---")
+
+        # First series of the pair (e.g., team_1 is "primary", team_2 is "secondary")
+        series_counter += 1
+        play_series(team_1, team_2,
+                    series_number=series_counter,
+                    total_series=total_series_sets * 2,  # Total individual 4-game series
+                    log_callback=log_callback)
+
+        # Second series of the pair (e.g., team_2 is "primary", team_1 is "secondary")
+        series_counter += 1
+        play_series(team_2, team_1,
+                    series_number=series_counter,
+                    total_series=total_series_sets * 2,  # Total individual 4-game series
+                    log_callback=log_callback)
+
+    if log_callback:
+        log_callback(f"Season play complete. Total individual series played: {series_counter}.")
+
+
+def preseason(teams, log_callback=None):
+    if log_callback: log_callback("Executing pre-season...")
     for team in teams:
+        # Ensure team_stats exists; it should be initialized with the Team object
+        if not hasattr(team, 'team_stats') or team.team_stats is None:
+            from stats import TeamStats  # Assuming TeamStats is in stats.py
+            team.team_stats = TeamStats()
         team.team_stats.reset_for_new_season()
-    print("Pre-season complete")
-    return teams
+    if log_callback: log_callback("Pre-season complete. Team stats reset for the new season.")
+    # return teams # teams are modified in-place
 
-def play_season(teams):
-    print("Beginning of season")
-    # Season
-    for team_1, team_2 in list(itertools.combinations(teams, 2)):
-        play_series(team_1, team_2)
-        play_series(team_2, team_1)
-    print("Season complete")
 
-def postseason(teams):
+def postseason(teams, log_callback=None):  # 'teams' here are the survivors
+    if log_callback: log_callback("Executing post-season stat reset for surviving teams...")
     for team in teams:
-        team.team_stats.reset_for_new_season()
-    print("Postseason complete")
-    return teams
+        if not hasattr(team, 'team_stats') or team.team_stats is None:
+            from stats import TeamStats
+            team.team_stats = TeamStats()
+        team.team_stats.reset_for_new_season()  # Resets for the *next* season
+    if log_callback: log_callback("Post-season stat reset for survivors complete.")
+    # return teams # teams are modified in-place
 
 def check_continue(teams):
     choice = input("Press enter to run it again, press N to quit: ").strip().lower()

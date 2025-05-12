@@ -15,12 +15,11 @@ from tournament import (
     preseason as tournament_preseason,
     play_season as tournament_play_season,
     postseason as tournament_postseason_culling,
-    # get_formatted_season_leaders, # No longer used directly by GUI for player stats tab
+    get_formatted_season_leaders,
     PLAYER_DATA_FILE, TEAMS_DIR
 )
 from stats import Stats  # Import Stats for type checking or default creation
 
-# It's good practice to check if these constants are defined or provide defaults
 try:
     from constants import MIN_TEAM_POINTS, MAX_TEAM_POINTS
 except ImportError:
@@ -32,7 +31,7 @@ class BaseballApp:
     def __init__(self, root_window):
         self.root = root_window
         self.root.title("Baseball Simulator GUI")
-        self.root.geometry("1250x850")  # Adjusted size for wider player stats
+        self.root.geometry("1250x850")
 
         self.all_teams = []
         self.season_number = 0
@@ -45,7 +44,7 @@ class BaseballApp:
         self.main_pane.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         self.left_pane_frame = ttk.Frame(self.main_pane, width=350)
-        self.main_pane.add(self.left_pane_frame, weight=1)  # Adjusted weight
+        self.main_pane.add(self.left_pane_frame, weight=1)
 
         controls_frame = ttk.LabelFrame(self.left_pane_frame, text="Tournament Controls")
         controls_frame.pack(padx=10, pady=(0, 10), fill="x", side=tk.TOP)
@@ -73,9 +72,8 @@ class BaseballApp:
         self.log_text_widget.config(state=tk.DISABLED)
 
         self.right_pane_notebook = ttk.Notebook(self.main_pane)
-        self.main_pane.add(self.right_pane_notebook, weight=4)  # Adjusted weight
+        self.main_pane.add(self.right_pane_notebook, weight=4)
 
-        # Standings Tab
         self.standings_tab_frame = ttk.Frame(self.right_pane_notebook)
         self.right_pane_notebook.add(self.standings_tab_frame, text='Standings')
         cols_standings = ("Team", "W", "L", "Win%", "ELO", "R", "RA", "Run Diff")
@@ -87,14 +85,10 @@ class BaseballApp:
             self.standings_treeview.column(col, width=85, anchor=tk.CENTER, stretch=tk.YES)
         self.standings_treeview.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # Player Statistics Tab (Replaces Player Leaders) --- MODIFIED ---
         self.player_stats_tab_frame = ttk.Frame(self.right_pane_notebook)
         self.right_pane_notebook.add(self.player_stats_tab_frame, text='Player Statistics (League-wide)')
-
         player_stats_pane = ttk.PanedWindow(self.player_stats_tab_frame, orient=tk.VERTICAL)
         player_stats_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # League Batting Stats Treeview
         league_batting_frame = ttk.LabelFrame(player_stats_pane, text="League Batting Stats (Season)")
         player_stats_pane.add(league_batting_frame, weight=1)
         self.cols_league_batting = ("Name", "Team", "Pos", "PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO",
@@ -110,8 +104,6 @@ class BaseballApp:
                                                            self.league_batting_stats_treeview, _col, False))
             self.league_batting_stats_treeview.column(col, width=w, anchor=anchor, stretch=tk.YES)
         self.league_batting_stats_treeview.pack(fill="both", expand=True, padx=5, pady=5)
-
-        # League Pitching Stats Treeview
         league_pitching_frame = ttk.LabelFrame(player_stats_pane, text="League Pitching Stats (Season)")
         player_stats_pane.add(league_pitching_frame, weight=1)
         self.cols_league_pitching = ("Name", "Team", "Role", "IP", "ERA", "WHIP", "BF", "K", "BB", "H", "R", "ER", "HR")
@@ -127,10 +119,8 @@ class BaseballApp:
             self.league_pitching_stats_treeview.column(col, width=w, anchor=anchor, stretch=tk.YES)
         self.league_pitching_stats_treeview.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # Team Rosters & Stats Tab
         self.roster_tab_frame = ttk.Frame(self.right_pane_notebook)
         self.right_pane_notebook.add(self.roster_tab_frame, text='Team Rosters & Stats')
-
         roster_selector_frame = ttk.Frame(self.roster_tab_frame)
         roster_selector_frame.pack(padx=5, pady=5, fill="x")
         ttk.Label(roster_selector_frame, text="Select Team:").pack(side=tk.LEFT, padx=(0, 5))
@@ -138,14 +128,12 @@ class BaseballApp:
                                                  state="readonly", width=40)
         self.roster_team_combobox.pack(side=tk.LEFT, fill="x", expand=True)
         self.roster_team_combobox.bind("<<ComboboxSelected>>", self._on_roster_team_selected)
-
         roster_stats_pane = ttk.PanedWindow(self.roster_tab_frame, orient=tk.VERTICAL)
         roster_stats_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=(0, 5))
-
         roster_batting_frame = ttk.LabelFrame(roster_stats_pane, text="Batting Stats (Season)")
         roster_stats_pane.add(roster_batting_frame, weight=1)
         self.cols_roster_batting = ("Name", "Pos", "PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO", "AVG",
-                                    "OBP", "SLG", "OPS")  # Changed "Role" to "Pos"
+                                    "OBP", "SLG", "OPS")
         self.roster_batting_treeview = ttk.Treeview(roster_batting_frame, columns=self.cols_roster_batting,
                                                     show='headings', height=8)
         for col in self.cols_roster_batting:
@@ -156,7 +144,6 @@ class BaseballApp:
                 self.roster_batting_treeview, _col, False))
             self.roster_batting_treeview.column(col, width=width, anchor=anchor, stretch=tk.YES)
         self.roster_batting_treeview.pack(fill="both", expand=True, padx=5, pady=5)
-
         roster_pitching_frame = ttk.LabelFrame(roster_stats_pane, text="Pitching Stats (Season)")
         roster_stats_pane.add(roster_pitching_frame, weight=1)
         self.cols_roster_pitching = ("Name", "Role", "IP", "ERA", "WHIP", "BF", "K", "BB", "H", "R", "ER", "HR")
@@ -192,10 +179,8 @@ class BaseballApp:
                     numeric_cols_batting_roster = ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO", "AVG",
                                                    "OBP", "SLG", "OPS"]
                     numeric_cols_pitching_roster = ["IP", "ERA", "WHIP", "BF", "K", "BB", "H", "R", "ER", "HR"]
-                    # For league-wide stats, Pos/Role are strings, Team is a string
                     numeric_cols_league_batting = numeric_cols_batting_roster
                     numeric_cols_league_pitching = numeric_cols_pitching_roster
-
                     is_numeric_col = False
                     if tv == self.standings_treeview and col in numeric_cols_standings:
                         is_numeric_col = True
@@ -207,7 +192,6 @@ class BaseballApp:
                         is_numeric_col = True
                     elif tv == self.league_pitching_stats_treeview and col in numeric_cols_league_pitching:
                         is_numeric_col = True
-
                     if is_numeric_col:
                         cleaned_value = value.replace('%', '').replace('+', '')
                         if col == "IP" and '.' in cleaned_value:
@@ -215,10 +199,12 @@ class BaseballApp:
                             numeric_value = float(parts[0]) + (float(parts[1]) / 3.0) if len(parts) == 2 and parts[
                                 1] else float(parts[0])
                         elif col in ["AVG", "OBP", "SLG", "OPS"] and value.startswith("."):
-                            numeric_value = float(value) if value != ".---" else -1  # Handle invalid stat strings
-                        elif value == "inf" or value == "-inf" or value == "nan":  # Handle ERA/WHIP edge cases
-                            numeric_value = float('inf') if value == "inf" else (
-                                float('-inf') if value == "-inf" else 999.99)  # Assign large for nan
+                            numeric_value = float(value) if value != ".---" else -1
+                        elif value.lower() == "inf" or value.lower() == "-inf" or value.lower() == "nan":
+                            numeric_value = float('inf') if value.lower() == "inf" else (
+                                float('-inf') if value.lower() == "-inf" else 99999.0)
+                            if col not in ["ERA"]:
+                                numeric_value = -1.0 if value.lower() == "nan" else numeric_value
                         else:
                             numeric_value = float(cleaned_value)
                         data_list.append((numeric_value, k))
@@ -226,7 +212,6 @@ class BaseballApp:
                         data_list.append((value.lower(), k))
                 except ValueError:
                     data_list.append((value.lower(), k))
-
             data_list.sort(key=lambda t: t[0], reverse=reverse)
             for index, (val, k) in enumerate(data_list):
                 tv.move(k, '', index)
@@ -310,7 +295,6 @@ class BaseballApp:
             else:
                 self.log_message(
                     f"Teams directory '{TEAMS_DIR}' not found or is not a directory. Skipping loading existing teams.")
-
             teams_to_generate = num_teams_to_init - len(temp_teams)
             if teams_to_generate > 0:
                 self.log_message(f"Need to generate {teams_to_generate} new teams.")
@@ -359,13 +343,13 @@ class BaseballApp:
     def _run_season_logic(self):
         try:
             self.log_message(f"--- Season {self.season_number}: Pre-season ---")
-            tournament_preseason(self.all_teams)
+            tournament_preseason(self.all_teams, log_callback=self.log_message)
             self.log_message("Pre-season complete.")
             self.log_message(f"--- Season {self.season_number}: Regular Season Playing ---")
-            tournament_play_season(self.all_teams)
+            tournament_play_season(self.all_teams, log_callback=self.log_message)
             self.log_message("Regular season play complete.")
             self.root.after(0, lambda: self.update_standings_display(self.all_teams))
-            self.root.after(0, self._update_league_player_stats_display)  # MODIFIED
+            self.root.after(0, self._update_league_player_stats_display)
             self.root.after(0, self._update_roster_tab_team_selector)
             self.root.after(0, lambda: self._set_app_state("SEASON_CONCLUDED"))
         except Exception as e:
@@ -387,7 +371,7 @@ class BaseballApp:
             survivors = [team for team in self.all_teams if team.team_stats.wins >= team.team_stats.losses]
             num_eliminated = len(self.all_teams) - len(survivors)
             self.log_message(f"{num_eliminated} teams eliminated based on W/L record.")
-            tournament_postseason_culling(survivors)
+            tournament_postseason_culling(survivors, log_callback=self.log_message)
             self.log_message("Survivor stats reset for next season.")
             self.all_teams = survivors
             num_teams_needed = self.num_teams_var.get()
@@ -432,49 +416,54 @@ class BaseballApp:
         if not teams_to_display:
             self.log_message("No teams to display in standings.")
             return
-        sorted_teams = sorted(teams_to_display, key=lambda t: (t.team_stats.wins, t.team_stats.elo_rating),
+
+        # Ensure team_stats objects exist and are the correct type
+        valid_teams_to_display = []
+        for team in teams_to_display:
+            if hasattr(team, 'team_stats') and team.team_stats is not None:
+                valid_teams_to_display.append(team)
+            else:
+                self.log_message(f"Warning: Team {team.name} missing team_stats. Skipping from standings.")
+
+        sorted_teams = sorted(valid_teams_to_display, key=lambda t: (t.team_stats.wins, t.team_stats.elo_rating),
                               reverse=True)
+
         for team in sorted_teams:
-            stats = team.team_stats
+            stats = team.team_stats  # Now we are sure stats exists
             win_pct_str = f".{int(stats.calculate_win_pct() * 1000):03d}" if stats.games_played > 0 else ".000"
             elo_str = f"{stats.elo_rating:.0f}"
             values = (team.name, stats.wins, stats.losses, win_pct_str,
-                      elo_str, stats.runs_scored, stats.runs_allowed, stats.run_differential)
+                      elo_str,
+                      stats.team_runs_scored,  # MODIFIED: Use team_runs_scored
+                      stats.team_runs_allowed,  # MODIFIED: Use team_runs_allowed
+                      stats.run_differential)
             self.standings_treeview.insert("", tk.END, values=values)
         self.log_message("Standings display updated.")
 
-    def _update_league_player_stats_display(self):  # MODIFIED from _update_leaderboards_display_gui
+    def _update_league_player_stats_display(self):
         self.log_message("Updating league-wide player statistics...", internal=True)
-        # Clear previous stats
         for i in self.league_batting_stats_treeview.get_children():
             self.league_batting_stats_treeview.delete(i)
         for i in self.league_pitching_stats_treeview.get_children():
             self.league_pitching_stats_treeview.delete(i)
-
         if not self.all_teams:
             self.log_message("No teams available to display league player stats.")
             return
-
         all_league_players = []
         for team_obj in self.all_teams:
-            # Add all player types from the team to the list
             all_league_players.extend(team_obj.batters)
             all_league_players.extend(team_obj.bench)
             all_league_players.extend(team_obj.all_pitchers)
-
         batting_entries = []
         pitching_entries = []
-
         for player in all_league_players:
             if not hasattr(player, 'season_stats') or player.season_stats is None:
-                player.season_stats = Stats()  # Ensure stats object exists
-
+                player.season_stats = Stats()
             team_name = player.team_name if hasattr(player, 'team_name') and player.team_name else "N/A"
-
             if isinstance(player, Batter):
                 player.season_stats.update_hits()
                 batting_values = (
-                    player.name, team_name, player.position,  # Use player.position
+                    player.name, team_name, player.position,
                     player.season_stats.plate_appearances, player.season_stats.at_bats,
                     player.season_stats.runs_scored, player.season_stats.hits,
                     player.season_stats.doubles, player.season_stats.triples,
@@ -484,26 +473,24 @@ class BaseballApp:
                     player.season_stats.calculate_slg(), player.season_stats.calculate_ops()
                 )
                 batting_entries.append(batting_values)
-
             elif isinstance(player, Pitcher):
+                era_val = player.season_stats.calculate_era()
+                whip_val = player.season_stats.calculate_whip()
                 pitching_values = (
-                    player.name, team_name, player.team_role or player.position,  # Use team_role or fallback
+                    player.name, team_name, player.team_role or player.position,
                     player.season_stats.get_formatted_ip(),
-                    f"{player.season_stats.calculate_era():.2f}",
-                    f"{player.season_stats.calculate_whip():.2f}",
+                    f"{era_val:.2f}" if era_val != float('inf') else "INF",
+                    f"{whip_val:.2f}" if whip_val != float('inf') else "INF",
                     player.season_stats.batters_faced, player.season_stats.strikeouts_thrown,
                     player.season_stats.walks_allowed, player.season_stats.hits_allowed,
                     player.season_stats.runs_allowed, player.season_stats.earned_runs_allowed,
                     player.season_stats.home_runs_allowed
                 )
                 pitching_entries.append(pitching_values)
-
-        # Populate Treeviews
         for entry in batting_entries:
             self.league_batting_stats_treeview.insert("", tk.END, values=entry)
         for entry in pitching_entries:
             self.league_pitching_stats_treeview.insert("", tk.END, values=entry)
-
         self.log_message("League-wide player statistics updated.")
 
     def _update_roster_tab_team_selector(self):
@@ -552,9 +539,9 @@ class BaseballApp:
             if not isinstance(player, Batter) or not hasattr(player, 'season_stats') or player.season_stats is None:
                 player.season_stats = Stats()
             player.season_stats.update_hits()
-            values = (  # MODIFIED: Using player.position for batters
+            values = (
                 player.name,
-                player.position,  # Display the player's actual assigned or primary position
+                player.position,
                 player.season_stats.plate_appearances, player.season_stats.at_bats,
                 player.season_stats.runs_scored, player.season_stats.hits,
                 player.season_stats.doubles, player.season_stats.triples,
@@ -568,12 +555,14 @@ class BaseballApp:
         for player in team_obj.all_pitchers:
             if not isinstance(player, Pitcher) or not hasattr(player, 'season_stats') or player.season_stats is None:
                 player.season_stats = Stats()
+            era_val = player.season_stats.calculate_era()
+            whip_val = player.season_stats.calculate_whip()
             values = (
                 player.name,
-                player.team_role or player.position,  # Pitchers still show team_role (SP, RP, CL)
+                player.team_role or player.position,
                 player.season_stats.get_formatted_ip(),
-                f"{player.season_stats.calculate_era():.2f}",
-                f"{player.season_stats.calculate_whip():.2f}",
+                f"{era_val:.2f}" if era_val != float('inf') else "INF",
+                f"{whip_val:.2f}" if whip_val != float('inf') else "INF",
                 player.season_stats.batters_faced, player.season_stats.strikeouts_thrown,
                 player.season_stats.walks_allowed, player.season_stats.hits_allowed,
                 player.season_stats.runs_allowed, player.season_stats.earned_runs_allowed,
