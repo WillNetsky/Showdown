@@ -1,88 +1,118 @@
-# Baseball Game Simulation
+# Python Baseball Simulator & Tournament Manager
 
-This project is a simple command-line baseball game simulator written in Python. It loads player data from CSV files, creates random teams based on player points and roster requirements, and simulates a baseball game inning by inning.
+## Overview
 
-# Project Structure
+This project is a Python-based baseball simulation tool that allows users to:
+* Load and manage baseball player data.
+* Automatically generate unique baseball teams based on player point values and roster requirements.
+* Simulate full baseball seasons between a configurable number of teams.
+* Track comprehensive player and team statistics, including an ELO rating system for teams.
+* Manage a persistent league where underperforming teams are culled and replaced by new, randomly generated teams after each season.
+* Interact with the simulation through a Tkinter-based Graphical User Interface (GUI).
 
-The project consists of the following Python files:
+The simulation is based on dice rolls and player charts, aiming to replicate a tabletop baseball game experience.
 
-* main.py: The main script to run the simulation. It handles finding and loading player data from CSVs, creating teams, running the game, and printing the results and player stats.
+## Features
 
-* game_logic.py: Contains the core game simulation logic, including functions for rolling dice, determining at-bat results, handling baserunners, playing innings, and managing pitching changes.
+* **Player Database:** Loads player attributes (batting/pitching charts, positions, points) from a central `all_players.json` file.
+* **Team Generation:** Creates random, valid 20-player rosters (9 starting batters, 1 bench batter, 4 starting pitchers, 6 relief/closing pitchers) within specified total point limits.
+* **Team Persistence:** Saves and loads generated teams to/from JSON files in a `teams/` directory.
+* **Game Simulation:**
+    * Detailed at-bat resolution based on pitcher vs. batter chart interactions and dice rolls.
+    * Baserunner movement logic.
+    * Pitching changes based on IP limits (though currently simplified in the GUI version's tournament flow).
+* **Season Simulation:**
+    * Round-robin style seasons where teams play multiple series against each other.
+    * Automatic ELO rating updates for teams after each game.
+* **Tournament Management:**
+    * Teams with losing records are removed after a season.
+    * New teams are generated to replace culled teams, maintaining the league size.
+* **Statistical Tracking:**
+    * **Player Stats:** Tracks a wide range of season statistics for batters (PA, AB, R, H, 2B, 3B, HR, RBI, BB, SO, AVG, OBP, SLG, OPS) and pitchers (IP, ERA, WHIP, BF, K, BB, H, R, ER, HR).
+    * **Team Stats:** Tracks Wins, Losses, ELO rating, Runs Scored, Runs Allowed, and Run Differential.
+* **Graphical User Interface (Tkinter):**
+    * Controls for initializing the tournament, running seasons, and managing the postseason.
+    * Displays for live simulation logs.
+    * Tabbed interface for viewing:
+        * League Standings (sortable by column).
+        * League-wide Player Statistics (batting and pitching, sortable).
+        * Individual Team Rosters and Player Season Stats (selectable by team).
+    * (Future) A tab for detailed, step-by-step single-game playout on a visual game mat.
 
-* entities.py: Defines the Batter and Pitcher classes, which hold player attributes and statistics.
+## Project Structure
 
-* team.py: Defines the Team class, which manages a team's roster (starters, bench, pitchers) and provides methods for getting the next batter or available pitchers.
+The project is organized into several Python modules:
 
-* constants.py: Stores various constants used throughout the project, such as position mappings and team point limits.
+* **`baseball_gui.py`**: The main application file that launches the Tkinter GUI and orchestrates the simulation through user interaction.
+* **`tournament.py`**: Contains the high-level logic for running preseasons, full seasons (series of games between teams), postseasons (culling and team regeneration), and functions for preparing player data for display.
+* **`game_logic.py`**: Implements the core mechanics of a single baseball game, including dice rolls, at-bat outcomes, baserunner advancement, and pitching changes.
+* **`entities.py`**: Defines the `Batter`, `Pitcher`, and `Team` classes, which are the fundamental data structures for players and team rosters.
+* **`team_management.py`**: Handles loading player data from `all_players.json`, creating random teams according to defined rules, and saving/loading team data to/from individual JSON files.
+* **`stats.py`**: Defines the `Stats` (for individual players) and `TeamStats` classes, responsible for calculating and storing all relevant statistics.
+* **`constants.py`**: Stores global constants used throughout the project, such as position mappings, roster requirements, and team point limits.
+* **`convert_csv_to_json.py`**: A utility script to convert player data from CSV format (e.g., `all_batters.csv`, `all_pitchers.csv`) into the `all_players.json` file used by the main application. This script is run separately as a one-time or as-needed data preparation step.
+* **`stats_display.py`**: (Primarily for the original command-line version) Contained functions to display linescores and boxscores. Some display logic for leaderboards in `tournament.py` was inspired by this.
 
-# Setup and Running
+## Data Files
 
-Save the files: Ensure you have all the Python files (main.py, game_logic.py, entities.py, team.py, constants.py) saved in the same directory.
+* **`all_players.json`**: The central database for all player cards. This file is expected to be a JSON array of player objects, where each object has attributes defining the player's stats, positions, points, etc., and a "type" field ("batter" or "pitcher").
+    * This file is generated by `convert_csv_to_json.py` from your source CSVs.
+* **`teams/` (directory)**: This directory is used to store JSON files for individual teams that are generated or loaded by the simulation. Each file (e.g., `Team_1_4850.json`) represents a single team's roster.
 
-Add CSV files: Place your player data CSV files (all_batters.csv and all_pitchers.csv) in the same directory as the Python scripts.
+## Setup and Running
 
-Run the simulation: Open a terminal or command prompt, navigate to the project directory, and run the main.py script using a Python interpreter:
+### Prerequisites
 
-    python main.py
+* **Python 3:** The project is written in Python 3.
+* **Tkinter:** Python's standard GUI library, usually included with Python installations. If not, you may need to install it (e.g., `sudo apt-get install python3-tk` on Debian/Ubuntu).
+* **(For Future Game Mat Feature) Pillow:** The Python Imaging Library (Pillow) will be needed for displaying the game mat image on the Tkinter Canvas. Install via pip:
+    ```bash
+    pip install Pillow
+    ```
 
-The simulation will run, and the game log, final score, and player statistics will be printed to the console.
+### Data Preparation
 
-# CSV File Format
-The simulation expects player data in CSV files with specific columns. Based on the files used in development (all_batters.csv and all_pitchers.csv), the expected columns include:
+1.  **Prepare Player CSVs:** You need `all_batters.csv` and `all_pitchers.csv` files with your player data. Refer to the column descriptions in `convert_csv_to_json.py` or the original `README.md` for expected formats.
+2.  **Convert CSV to JSON:** Run the `convert_csv_to_json.py` script to generate the `all_players.json` file in the same directory as the other Python scripts.
+    ```bash
+    python convert_csv_to_json.py
+    ```
+    Ensure `all_batters.csv` and `all_pitchers.csv` are in the same directory when you run this.
 
-* Name: Player's name.
+### Running the Simulation GUI
 
-* year: (Present in all_batters.csv, not currently used in simulation logic)
+1.  Ensure all Python files (`baseball_gui.py`, `tournament.py`, etc.) and the `all_players.json` file are in the same project directory.
+2.  Create a subdirectory named `teams/` in your project directory if it doesn't exist. This is where team files will be saved and loaded from.
+3.  Run the main GUI application:
+    ```bash
+    python baseball_gui.py
+    ```
 
-* cardN: (Present in all_batters.csv, not currently used in simulation logic)
+### GUI Usage Flow
 
-* teal: (Present in all_batters.csv, not currently used in simulation logic)
+1.  **Initialize/Load Teams:** Click this button first. It will load existing teams from the `teams/` directory or generate new random teams if not enough are found, up to the "Number of Teams" specified.
+2.  **Run Season:** Once teams are initialized, click this to simulate a full season. The log will show progress, and standings/player stats will update upon completion.
+3.  **Run Postseason & Prepare Next:** After a season concludes, click this button. It will:
+    * Remove teams with losing records.
+    * Reset stats for surviving teams.
+    * Generate new teams to replace the culled ones.
+    * Prepare the league for the next season.
+4.  Repeat "Run Season" and "Run Postseason" as desired.
+5.  Explore the "Standings," "Player Statistics," and "Team Rosters & Stats" tabs to view data.
 
-* onbase: Batter's On-Base number (used for determining pitch quality).
+## Key Concepts
 
-* so: Strikeout range value.
+* **Player Cards:** Players are defined by their on-field performance charts (ranges for SO, GB, FB, 1B, HR, etc.) and point values.
+* **Team Construction:** Teams are built to meet specific roster size and positional requirements, while staying within a total point budget.
+* **ELO Rating:** A dynamic rating system that adjusts team strength based on game outcomes and opponent strength.
+* **Persistent League:** The tournament structure allows for a league that evolves over multiple seasons, with teams competing to survive.
 
-* fo (or FB): Flyball range value.
+## Future Development Ideas
 
-* bb (or BB): Walk range value.
+* **Detailed Single-Game Playout:** Implement the "Play Single Game" tab with a Tkinter Canvas to visually represent a game board, allowing step-by-step play with dice roll visibility.
+* **Advanced Managerial AI:** More sophisticated logic for in-game decisions like pitching changes or pinch-hitting.
+* **Player Development/Aging:** Mechanics for players' skills to change over multiple seasons.
+* **Expanded Statistics:** More advanced sabermetrics (e.g., FIP for pitchers, wOBA for batters).
+* **Customizable Tournament Structures:** Options for different playoff formats, league sizes, or season lengths.
+* **Error Handling and Input Validation:** More robust checks throughout the GUI and backend logic.
 
-* bi (or 1B): Single range value.
-
-* bip (or 1BP): Single with runner advance range value.
-
-* b2 (or 2B): Double range value.
-
-* b3 (or 3B): Triple range value.
-
-* han: (Present in all_batters.csv, not currently used in simulation logic)
-
-* hr (or HR): Home Run range value.
-
-* pts: Player's points value (used for team construction).
-
-* ip (or IP Limit): Pitcher's Innings Pitched limit.
-
-* hand: Pitcher's throwing hand (not currently used in simulation logic).
-
-* fld1, pos2, fld2, pos3, fld3, pos4, fld4: Fielding position and rating columns (position is used for roster construction, fielding rating is not currently used).
-
-* pos (or Position): Player's primary position (e.g., "Starter", "Reliever", "Closer" for pitchers, standard baseball positions for batters).
-
-* control: Pitcher's Control range value.
-
-* pu: Pitcher's PU range value.
-
-The load_players_from_csv function has some flexibility to handle variations in column casing and can infer player type if the 'Type' column is missing, based on the presence of key stats like 'onbase' (for batters) or 'control' (for pitchers).
-
-# Dependencies
-
-This project uses standard Python libraries and does not require any external packages to be installed.
-
-* random: For dice rolls and random team selection.
-
-* csv: For reading player data from CSV files.
-
-* os: For file path operations.
-
-* glob: For finding CSV files in the directory.
