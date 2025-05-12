@@ -66,6 +66,160 @@ def check_continue(teams):
         exit(0)
 
 
+def get_formatted_season_leaders(all_players_list, n=10, player_type="both"):
+    """
+    Generates a formatted string of the top n leaders in various statistics.
+    Players in all_players_list are expected to have a `season_stats` attribute.
+
+    Args:
+        all_players_list (list): List of player objects (batters and/or pitchers).
+        n (int): Number of top players to display for each category.
+        player_type (str): "batting", "pitching", or "both".
+
+    Returns:
+        str: A multi-line string containing the formatted leaderboards.
+    """
+    output_lines = []
+
+    # Stat Definitions: (stat_attribute_name, display_name, display_format_str, is_calculated_method, min_qualifier_value)
+    # For rate stats, min_qualifier_value is the threshold (e.g., min PA or min Outs Rec).
+    # For counting stats, min_qualifier_value is often 0 or not strictly used for filtering but for context.
+    # The 'n' parameter here is for the number of games used to calculate typical qualifiers.
+    # For example, if a season has 'N_GAMES', then MIN_PA = N_GAMES * 2.0 (or 3.1 in MLB)
+    # and MIN_IP_OUTS = N_GAMES * 3 (for 1 IP per game).
+    # The original tournament.py used 'n' (top N players) for this, which is a bit unusual but we'll keep it.
+    # So, if n=10, min PA qualifier is 31, min IP qualifier (in outs) is 30.
+
+    MIN_PA_QUALIFIER = 3.1 * 10  # Consistent with original display_season_leaders logic (n=10 default)
+    MIN_IP_OUTS_QUALIFIER = 1.0 * 10 * 3  # Consistent with original (n=10 default for games, 3 outs/IP)
+
+    batting_stats_definitions = [
+        ("plate_appearances", "Plate Appearances (PA)", "{:.0f}", False, 0),
+        ("at_bats", "At Bats (AB)", "{:.0f}", False, 0),
+        ("runs_scored", "Runs (R)", "{:.0f}", False, 0),
+        ("hits", "Hits (H)", "{:.0f}", False, 0),
+        ("singles", "Singles (1B)", "{:.0f}", False, 0),
+        ("doubles", "Doubles (2B)", "{:.0f}", False, 0),
+        ("triples", "Triples (3B)", "{:.0f}", False, 0),
+        ("home_runs", "Home Runs (HR)", "{:.0f}", False, 0),
+        ("walks", "Walks (BB)", "{:.0f}", False, 0),
+        ("strikeouts", "Strikeouts (SO Bat)", "{:.0f}", False, 0),
+        ("rbi", "Runs Batted In (RBI)", "{:.0f}", False, 0),
+        ("calculate_avg", "Batting Average (AVG)", "{}", True, MIN_PA_QUALIFIER),
+        ("calculate_obp", "On-Base Pct (OBP)", "{}", True, MIN_PA_QUALIFIER),
+        ("calculate_slg", "Slugging Pct (SLG)", "{}", True, MIN_PA_QUALIFIER),
+        ("calculate_ops", "On-Base + Slugging (OPS)", "{}", True, MIN_PA_QUALIFIER)
+    ]
+
+    pitching_stats_definitions = [
+        ("batters_faced", "Batters Faced (BF)", "{:.0f}", False, 0),
+        ("outs_recorded", "Outs Recorded", "{:.0f}", False, 0),  # Raw outs for sorting if needed
+        ("strikeouts_thrown", "Strikeouts (SO Pit)", "{:.0f}", False, 0),
+        ("walks_allowed", "Walks Allowed (BB)", "{:.0f}", False, 0),
+        ("hits_allowed", "Hits Allowed (H)", "{:.0f}", False, 0),
+        ("home_runs_allowed", "Home Runs Allowed (HR)", "{:.0f}", False, 0),
+        ("runs_allowed", "Runs Allowed (R)", "{:.0f}", False, 0),
+        ("earned_runs_allowed", "Earned Runs (ER)", "{:.0f}", False, 0),
+        ("outs_recorded", "Innings Pitched (IP)", "{}", False, MIN_IP_OUTS_QUALIFIER),  # Special display for IP
+        ("calculate_era", "Earned Run Average (ERA)", "{:.2f}", True, MIN_IP_OUTS_QUALIFIER),
+        ("calculate_whip", "Walks+Hits per IP (WHIP)", "{:.2f}", True, MIN_IP_OUTS_QUALIFIER),
+        ("calculate_k_per_9", "Strikeouts per 9 Inn (K/9)", "{:.2f}", True, MIN_IP_OUTS_QUALIFIER)
+    ]
+
+    def get_stat_value_for_sorting(player, stat_name, is_calculated_method):
+        """Gets stat value, converting to float for sorting where appropriate."""
+        if not hasattr(player, 'season_stats') or player.season_stats is None:
+            return 0.0 if is_calculated_method and stat_name in ["calculate_era", "calculate_whip",
+                                                                 "calculate_k_per_9"] else (
+                0.0 if is_calculated_method else 0)
+
+        stats_obj = player.season_stats
+        if is_calculated_method:
+            val_str = getattr(stats_obj, stat_name)()  # e.g., ".300" or "3.45"
+            try:
+                return float(val_str)
+            except ValueError:  # Handle non-numeric strings like ".---"
+                return -1.0 if stat_name == "calculate_era" else 0.0  # Low ERA is good, so -1 better than 0 for sorting
+        else:
+            if stat_name == "hits": stats_obj.update_hits()  # Ensure hits are current
+            return getattr(stats_obj, stat_name, 0)
+
+    def format_stat_for_display(player, stat_name_key, raw_value_for_display, display_format_str, is_calculated_method):
+        """Formats the stat for display, using specific methods for certain stats like IP or AVG."""
+        if not hasattr(player, 'season_stats') or player.season_stats is None:
+            return "N/A"
+
+        stats_obj = player.season_stats
+        if stat_name_key == "outs_recorded" and display_format_str == "{}":  # IP display
+            return stats_obj.get_formatted_ip()
+        elif is_calculated_method and stat_name_key in ["calculate_avg", "calculate_obp", "calculate_slg",
+                                                        "calculate_ops"]:
+            return getattr(stats_obj, stat_name_key)()  # Get the pre-formatted string like ".300"
+        elif isinstance(raw_value_for_display, (float, int)):
+            return display_format_str.format(raw_value_for_display)
+        return str(raw_value_for_display)  # Fallback
+
+    def generate_leaders_for_category(players, stat_definitions, category_header):
+        output_lines.append(f"\n{'=' * 15} {category_header} LEADERS {'=' * 15}\n")
+
+        for stat_key, display_name, disp_fmt, is_calc, min_qual_val in stat_definitions:
+            output_lines.append(f"{display_name}:")
+
+            # Filter qualified players
+            qualified_players = []
+            if stat_key in ["calculate_avg", "calculate_obp", "calculate_slg", "calculate_ops"]:
+                qualified_players = [p for p in players if hasattr(p,
+                                                                   'season_stats') and p.season_stats and p.season_stats.plate_appearances >= min_qual_val]
+            elif stat_key in ["calculate_era", "calculate_whip", "calculate_k_per_9"] or \
+                    (stat_key == "outs_recorded" and display_name == "Innings Pitched (IP)"):
+                qualified_players = [p for p in players if hasattr(p,
+                                                                   'season_stats') and p.season_stats and p.season_stats.outs_recorded >= min_qual_val]
+            else:  # Counting stats, no specific qualifier beyond having stats
+                qualified_players = [p for p in players if hasattr(p, 'season_stats') and p.season_stats]
+
+            if not qualified_players:
+                output_lines.append("  No qualified players.")
+                output_lines.append("")
+                continue
+
+            # Sort players
+            sort_reverse = not (stat_key == "calculate_era")  # Lower ERA is better
+
+            sorted_leaders = sorted(
+                qualified_players,
+                key=lambda p_obj: get_stat_value_for_sorting(p_obj, stat_key, is_calc),
+                reverse=sort_reverse
+            )
+
+            for i, player_obj in enumerate(sorted_leaders[:n]):
+                # Get the value again, this time for display formatting
+                # For calculated methods, we might want the original string if it's already formatted (like AVG)
+                # For others, we use the value obtained for sorting.
+                value_to_format = get_stat_value_for_sorting(player_obj, stat_key, is_calc)
+                display_value_str = format_stat_for_display(player_obj, stat_key, value_to_format, disp_fmt, is_calc)
+
+                year_set = f"{player_obj.year}{player_obj.set}" if (player_obj.year or player_obj.set) else ""
+                team_name_str = f" ({player_obj.team_name})" if hasattr(player_obj,
+                                                                        'team_name') and player_obj.team_name else ""
+
+                output_lines.append(f"  {i + 1}. {player_obj.name} {year_set}{team_name_str}: {display_value_str}")
+            output_lines.append("")
+
+    # Separate players by type for processing
+    batting_player_pool = [p for p in all_players_list if hasattr(p, 'on_base')]  # Batters have 'on_base'
+    pitching_player_pool = [p for p in all_players_list if hasattr(p, 'control')]  # Pitchers have 'control'
+
+    if player_type.lower() in ["batting", "both"] and batting_player_pool:
+        generate_leaders_for_category(batting_player_pool, batting_stats_definitions, "BATTING")
+
+    if player_type.lower() in ["pitching", "both"] and pitching_player_pool:
+        generate_leaders_for_category(pitching_player_pool, pitching_stats_definitions, "PITCHING")
+
+    if not output_lines:
+        return "No leaderboard data to display."
+
+    return "\n".join(output_lines)
+
 def display_season_leaders(all_players, n=10, player_type="both"):
     """
     Display the top n leaders in various batting and/or pitching statistics.
@@ -210,7 +364,7 @@ def print_standings_with_elo(teams):
         print(
             f"{team.name:20} {stats.wins:2}-{stats.losses:<2}   .{int(stats.calculate_win_pct() * 1000):3}   {stats.elo_rating:4.0f}  {stats.runs_scored}  {stats.runs_allowed}  {stats.run_differential:+3d}")
 
-def main(all_teams,num_teams = 2):
+def main(all_teams,num_teams = 20):
     preseason(all_teams)
     play_season(all_teams)
 
@@ -229,7 +383,7 @@ def main(all_teams,num_teams = 2):
 
 
     # Remove teams with a losing record
-    all_teams = list(filter(lambda x: x.team_stats.wins > x.team_stats.losses, all_teams))
+    all_teams = list(filter(lambda x: x.team_stats.wins >= x.team_stats.losses, all_teams))
     postseason(all_teams)
 
     # Create replacement teams
@@ -247,7 +401,7 @@ def main(all_teams,num_teams = 2):
             all_teams.append(team)
     check_continue(all_teams)
 
-def init(num_teams=2):
+def init(num_teams=20):
     print("Starting Baseball Simulation...")
     all_teams = []
     available_teams = glob.glob(os.path.join(TEAMS_DIR, 'Team_*.json'))
