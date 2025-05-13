@@ -14,8 +14,8 @@ class Stats:
         self.home_runs = 0
         self.walks = 0
         self.strikeouts = 0
-        self.outs = 0
-        self.hits = 0
+        self.outs = 0  # Total outs made by this batter at the plate
+        self.hits = 0  # Combined hits stat
 
         # Pitching stats to track
         self.batters_faced = 0
@@ -24,44 +24,37 @@ class Stats:
         self.hits_allowed = 0
         self.walks_allowed = 0
         self.strikeouts_thrown = 0
-        self.outs_recorded = 0
+        self.outs_recorded = 0  # Outs recorded by this pitcher
         self.home_runs_allowed = 0
 
     def update_hits(self):
+        """Calculate total hits from individual hit types"""
         self.hits = self.singles + self.doubles + self.triples + self.home_runs
 
     def calculate_avg(self):
         self.update_hits()
-        if self.at_bats == 0:
-            return ".000"
+        if self.at_bats == 0: return ".000"
         avg = self.hits / self.at_bats
         avg_str = "{:.3f}".format(avg)
         return avg_str[1:] if avg < 1.0 and avg_str.startswith("0.") else avg_str
 
     def calculate_obp(self):
         self.update_hits()
-        # OBP = (Hits + Walks + Hit By Pitch) / (At Bats + Walks + Hit By Pitch + Sacrifice Flies)
-        # Simplified for current stats: (Hits + Walks) / (At Bats + Walks)
-        # Or, if PA is comprehensive: (Hits + Walks) / PA
-        # Using a common simplified denominator:
+        # Simplified OBP: (H + BB) / (AB + BB + SF + HBP)
+        # Using available stats: (H + BB) / (AB + BB) assuming no SF/HBP tracked for PA.
+        # Or more accurately if PA is tracked comprehensively: (H + BB) / PA
+        # For now, using a common simplified denominator:
         denominator = self.at_bats + self.walks
-        if denominator == 0:  # Avoid division by zero; use PA if it's more comprehensive and non-zero
-            if self.plate_appearances > 0:
-                denominator = self.plate_appearances  # Fallback to PA if AB+BB is 0 but PA exists
-            else:
-                return ".000"  # Still no valid denominator
+        if self.plate_appearances > 0 and self.plate_appearances > denominator:  # If PA is more comprehensive
+            denominator = self.plate_appearances
+        if denominator == 0: return ".000"
 
-        # If after fallback, denominator is still 0
-        if denominator == 0:
-            return ".000"
-
-        obp = (self.hits + self.walks) / denominator  # Assuming HBP not tracked for numerator
+        obp = (self.hits + self.walks) / denominator  # Assuming HBP not in numerator
         obp_str = "{:.3f}".format(obp)
         return obp_str[1:] if obp < 1.0 and obp_str.startswith("0.") else obp_str
 
     def calculate_slg(self):
-        if self.at_bats == 0:
-            return ".000"
+        if self.at_bats == 0: return ".000"
         total_bases = (self.singles * 1) + (self.doubles * 2) + (self.triples * 3) + (self.home_runs * 4)
         slg = total_bases / self.at_bats
         slg_str = "{:.3f}".format(slg)
@@ -71,13 +64,14 @@ class Stats:
         str_obp = self.calculate_obp()
         str_slg = self.calculate_slg()
         try:
-            obp_val = float("0" + str_obp if str_obp.startswith(".") else str_obp)
+            obp_val = float("0" + str_obp if str_obp.startswith(".") and str_obp != ".---" else str_obp)
         except ValueError:
             obp_val = 0.0
         try:
-            slg_val = float("0" + str_slg if str_slg.startswith(".") else str_slg)
+            slg_val = float("0" + str_slg if str_slg.startswith(".") and str_slg != ".---" else str_slg)
         except ValueError:
             slg_val = 0.0
+
         ops_val = obp_val + slg_val
         ops_str = "{:.3f}".format(ops_val)
         return ops_str[1:] if ops_val < 1.0 and ops_str.startswith("0.") else ops_str
@@ -93,8 +87,7 @@ class Stats:
         return (self.walks_allowed + self.hits_allowed) / (self.outs_recorded / 3.0)
 
     def calculate_k_per_9(self):
-        if self.outs_recorded == 0:
-            return 0.0
+        if self.outs_recorded == 0: return 0.0
         return (self.strikeouts_thrown * 9) / (self.outs_recorded / 3.0)
 
     def get_formatted_ip(self):
@@ -103,6 +96,7 @@ class Stats:
         return f"{whole_innings}.{fractional_part}"
 
     def add_stats(self, other_stats):
+        if other_stats is None: return self
         for attr, value in vars(other_stats).items():
             if isinstance(value, (int, float)):
                 current_value = getattr(self, attr, 0)
@@ -110,17 +104,16 @@ class Stats:
         return self
 
     def reset(self):
-        # Only reset attributes that are defined in this base Stats class
-        base_attrs = {
+        """Resets only the countable player statistics defined in this base class."""
+        player_stat_attrs = [
             'plate_appearances', 'at_bats', 'runs_scored', 'rbi', 'singles',
             'doubles', 'triples', 'home_runs', 'walks', 'strikeouts', 'outs', 'hits',
             'batters_faced', 'runs_allowed', 'earned_runs_allowed', 'hits_allowed',
             'walks_allowed', 'strikeouts_thrown', 'outs_recorded', 'home_runs_allowed'
-        }
-        for attr in base_attrs:
-            if hasattr(self, attr) and isinstance(getattr(self, attr), (int, float)):
-                setattr(self, attr, 0)
-        self.hits = 0  # Explicitly reset calculated hits
+        ]
+        for attr in player_stat_attrs:
+            setattr(self, attr, 0)
+        # self.hits = 0 # update_hits() will recalculate this when needed
 
     def __str__(self):
         self.update_hits()
@@ -133,18 +126,20 @@ class Stats:
         return f"{batting} | {pitching}"
 
 
-class TeamStats(Stats):
+class TeamStats(Stats):  # TeamStats can inherit player stats for team totals if needed
     def __init__(self):
-        super().__init__()
+        super().__init__()  # Initialize base Stats (for team totals of player-like stats if used)
         self.wins = 0
         self.losses = 0
         self.games_played = 0
-        self.elo_rating = 1500.0  # Ensure it's a float for precision
+        self.elo_rating = 1500.0
         self.highest_elo = 1500.0
         self.lowest_elo = 1500.0
-        self.elo_history = []
+        self.elo_history = []  # List of (games_played_at_update, elo_after_update)
         self.season_number = 1
-        self.historical_records = []
+        self.historical_records = []  # List of (season_num, wins, losses, final_elo, run_diff)
+
+        # Team-specific aggregate counters (distinct from inherited player stats)
         self.team_runs_scored = 0
         self.team_runs_allowed = 0
         self.run_differential = 0
@@ -152,19 +147,16 @@ class TeamStats(Stats):
         self.shutouts_against = 0
 
     def calculate_win_pct(self):
-        if self.games_played == 0:
-            return 0.0
+        if self.games_played == 0: return 0.0
         return self.wins / self.games_played
 
     def calculate_pythagorean_wins(self):
-        if self.team_runs_scored == 0 and self.team_runs_allowed == 0:
-            return 0.0
+        if self.team_runs_scored == 0 and self.team_runs_allowed == 0: return 0.0
         exponent = 1.83
-        runs_scored_sq = self.team_runs_scored ** exponent
-        runs_allowed_sq = self.team_runs_allowed ** exponent
-        if (runs_scored_sq + runs_allowed_sq) == 0:
-            return 0.0
-        expected_win_pct = runs_scored_sq / (runs_scored_sq + runs_allowed_sq)
+        rs_sq = self.team_runs_scored ** exponent
+        ra_sq = self.team_runs_allowed ** exponent
+        if (rs_sq + ra_sq) == 0: return 0.0
+        expected_win_pct = rs_sq / (rs_sq + ra_sq)
         return expected_win_pct * self.games_played
 
     def update_from_game(self, game_result):
@@ -191,38 +183,22 @@ class TeamStats(Stats):
                 runs_allowed=ra
             )
 
-    def reset_for_new_season(self, maintain_elo=True, default_elo=1500.0):
-        """
-        Resets team stats for a new season.
-        Crucially, handles ELO rating preservation or reset *after* calling super().reset().
-        """
-        if self.games_played > 0:
+    def reset_for_new_season(self, maintain_elo=True, default_elo=1500.0, team_name_for_debug="UnknownTeam"):
+        """Resets team stats for a new season, carefully handling ELO."""
+        # print(f"DEBUG: TeamStats.reset_for_new_season for {team_name_for_debug} - Entry ELO: {self.elo_rating}, maintain_elo: {maintain_elo}")
+
+        if self.games_played > 0:  # Store record only if games were played
             self.historical_records.append((
                 self.season_number, self.wins, self.losses,
                 self.elo_rating, self.run_differential
             ))
 
-        # Store current ELO before super().reset() potentially clears it
-        current_elo_before_reset = self.elo_rating
-        current_highest_elo = self.highest_elo
-        current_lowest_elo = self.lowest_elo
+        # Store ELO related values before any reset operation
+        current_elo = self.elo_rating
+        current_highest = self.highest_elo
+        current_lowest = self.lowest_elo
 
-        super().reset()  # Resets attributes defined in the base Stats class
-
-        # Now, correctly handle ELO rating
-        if maintain_elo:
-            self.elo_rating = current_elo_before_reset
-            self.highest_elo = current_highest_elo  # Preserve if maintaining ELO
-            self.lowest_elo = current_lowest_elo  # Preserve if maintaining ELO
-            # Optional: ELO regression towards the mean
-            # regression_factor = 0.33
-            # self.elo_rating = default_elo + (self.elo_rating - default_elo) * (1 - regression_factor)
-        else:
-            self.elo_rating = default_elo
-            self.highest_elo = default_elo
-            self.lowest_elo = default_elo
-
-        # Reset other TeamStats specific fields
+        # Reset general team counters (W, L, runs, etc.)
         self.wins = 0
         self.losses = 0
         self.games_played = 0
@@ -231,10 +207,36 @@ class TeamStats(Stats):
         self.run_differential = 0
         self.shutouts_for = 0
         self.shutouts_against = 0
-        # elo_history could be cleared or appended with a season marker if desired
-        # self.elo_history = [] # To reset history each season
+
+        # Call super().reset() to reset any inherited player-like stats from the base Stats class.
+        # The modified Stats.reset() will only touch base player stats, not ELO.
+        super().reset()
+        # print(f"DEBUG: {team_name_for_debug} - ELO after super().reset(): {self.elo_rating} (should be unchanged by Stats.reset)")
+
+        # Now, explicitly handle ELO based on maintain_elo flag
+        if maintain_elo:
+            self.elo_rating = current_elo  # Restore the ELO captured before resets
+            self.highest_elo = current_highest  # Restore if maintaining
+            self.lowest_elo = current_lowest  # Restore if maintaining
+            # Optional regression:
+            # regression_factor = 0.33
+            # self.elo_rating = default_elo + (self.elo_rating - default_elo) * (1 - regression_factor)
+            # if self.elo_rating > self.highest_elo: self.highest_elo = self.elo_rating # Adjust if regressed
+            # if self.elo_rating < self.lowest_elo: self.lowest_elo = self.elo_rating # Adjust if regressed
+
+        else:  # Reset ELO to default
+            self.elo_rating = default_elo
+            self.highest_elo = default_elo
+            self.lowest_elo = default_elo
+
+        # elo_history can be managed per season or continuously.
+        # If per season: self.elo_history = []
+        # If continuous, it just keeps growing.
+        # For now, let it be continuous. A marker could be added:
+        # self.elo_history.append({'season_start': self.season_number + 1, 'elo': self.elo_rating})
 
         self.season_number += 1
+        # print(f"DEBUG: {team_name_for_debug} - Exit ELO: {self.elo_rating}")
         return self.season_number
 
     def update_elo(self, opponent_elo, win, runs_scored=0, runs_allowed=0, k_factor=20):
@@ -259,7 +261,7 @@ class TeamStats(Stats):
         self.elo_rating += elo_change
         self.highest_elo = max(self.highest_elo, self.elo_rating)
         self.lowest_elo = min(self.lowest_elo, self.elo_rating)
-        if self.games_played > 0:  # Ensure games_played is updated before appending to history
+        if self.games_played > 0:
             self.elo_history.append((self.games_played, self.elo_rating))
         return elo_change
 
@@ -269,3 +271,4 @@ class TeamStats(Stats):
                 f"ELO: {self.elo_rating:.0f}, "
                 f"RS: {self.team_runs_scored}, RA: {self.team_runs_allowed}, "
                 f"Diff: {self.run_differential:+d}")
+

@@ -5,6 +5,8 @@ import threading
 import os
 import glob  # For finding team files
 import time  # For timestamping logs
+import json  # For peeking into team JSONs for ELO
+import re  # MODIFIED: Added import for regular expressions
 
 # Import your existing project modules
 from team_management import (load_players_from_json, create_random_team,
@@ -18,7 +20,7 @@ from tournament import (
     get_formatted_season_leaders,
     PLAYER_DATA_FILE, TEAMS_DIR
 )
-from stats import Stats  # Import Stats for type checking or default creation
+from stats import Stats, TeamStats  # Import Stats for type checking or default creation
 
 try:
     from constants import MIN_TEAM_POINTS, MAX_TEAM_POINTS
@@ -27,11 +29,114 @@ except ImportError:
     MAX_TEAM_POINTS = 5000  # Default fallback
 
 
+class TeamSelectionDialog(tk.Toplevel):
+    def __init__(self, parent, current_num_teams_needed):
+        super().__init__(parent)
+        self.transient(parent)
+        self.grab_set()
+        self.title("Select Teams for Tournament")
+        self.parent = parent
+        self.current_num_teams_needed = current_num_teams_needed
+        self.selected_team_filepaths = None
+
+        self.geometry("500x450")
+
+        list_frame = ttk.Frame(self)
+        list_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+
+        ttk.Label(list_frame,
+                  text=f"Select up to {self.current_num_teams_needed} teams. Remaining slots will be auto-generated.").pack(
+            pady=(0, 5))
+
+        self.listbox_scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL)
+        self.team_listbox = tk.Listbox(list_frame, selectmode=tk.MULTIPLE, yscrollcommand=self.listbox_scrollbar.set,
+                                       exportselection=False)
+        self.listbox_scrollbar.config(command=self.team_listbox.yview)
+
+        self.listbox_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.team_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.available_teams_data = []
+        self._populate_team_list()
+
+        button_frame = ttk.Frame(self)
+        button_frame.pack(padx=10, pady=(0, 10), fill=tk.X)
+
+        self.confirm_button = ttk.Button(button_frame, text="Confirm Selections", command=self._on_confirm)
+        self.confirm_button.pack(side=tk.LEFT, padx=5, expand=True)
+
+        self.select_all_button = ttk.Button(button_frame, text="Select All Visible", command=self._select_all_visible)
+        self.select_all_button.pack(side=tk.LEFT, padx=5, expand=True)
+
+        self.deselect_all_button = ttk.Button(button_frame, text="Deselect All", command=self._deselect_all)
+        self.deselect_all_button.pack(side=tk.LEFT, padx=5, expand=True)
+
+        self.cancel_button = ttk.Button(button_frame, text="Cancel", command=self._on_cancel)
+        self.cancel_button.pack(side=tk.LEFT, padx=5, expand=True)
+
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+        self.wait_window(self)
+
+    def _populate_team_list(self):
+        self.team_listbox.delete(0, tk.END)
+        self.available_teams_data = []
+
+        if not os.path.exists(TEAMS_DIR) or not os.path.isdir(TEAMS_DIR):
+            self.team_listbox.insert(tk.END, "Teams directory not found.")
+            return
+
+        team_files = sorted(glob.glob(os.path.join(TEAMS_DIR, 'Team_*.json')))
+        if not team_files:
+            self.team_listbox.insert(tk.END, "No saved teams found in 'teams/' directory.")
+            return
+
+        for filepath in team_files:
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                team_name = data.get("name", os.path.splitext(os.path.basename(filepath))[0])
+                elo = 1500.0
+                if "team_stats_data" in data and data["team_stats_data"] is not None:
+                    elo = data["team_stats_data"].get("elo_rating", 1500.0)
+
+                display_string = f"{team_name} (ELO: {elo:.0f})"
+                self.available_teams_data.append((display_string, filepath))
+                self.team_listbox.insert(tk.END, display_string)
+            except Exception as e:
+                # Use the main app's logger if available, otherwise print
+                if hasattr(self.parent, 'log_message') and callable(self.parent.log_message):
+                    self.parent.log_message(f"Error reading team file {filepath} for dialog: {e}")
+                else:
+                    print(f"Error reading team file {filepath} for dialog: {e}")
+                self.team_listbox.insert(tk.END, f"Error: {os.path.basename(filepath)}")
+
+    def _select_all_visible(self):
+        self.team_listbox.select_set(0, tk.END)
+
+    def _deselect_all(self):
+        self.team_listbox.selection_clear(0, tk.END)
+
+    def _on_confirm(self):
+        selected_indices = self.team_listbox.curselection()
+        if len(selected_indices) > self.current_num_teams_needed:
+            messagebox.showwarning("Too Many Teams",
+                                   f"Please select no more than {self.current_num_teams_needed} teams.",
+                                   parent=self)
+            return
+
+        self.selected_team_filepaths = [self.available_teams_data[i][1] for i in selected_indices]
+        self.destroy()
+
+    def _on_cancel(self):
+        self.selected_team_filepaths = None
+        self.destroy()
+
+
 class BaseballApp:
     def __init__(self, root_window):
         self.root = root_window
         self.root.title("Baseball Simulator GUI")
-        self.root.geometry("1350x850")  # Adjusted size for new columns
+        self.root.geometry("1350x850")
 
         self.all_teams = []
         self.season_number = 0
@@ -64,6 +169,10 @@ class BaseballApp:
                                                 command=self.run_postseason_and_prepare_threaded)
         self.run_postseason_button.grid(row=3, column=0, columnspan=2, padx=5, pady=2, sticky="ew")
 
+        self.clear_tournament_button = ttk.Button(controls_frame, text="Clear Tournament Data",
+                                                  command=self.prompt_clear_tournament_data)
+        self.clear_tournament_button.grid(row=4, column=0, columnspan=2, padx=5, pady=(10, 2), sticky="ew")
+
         log_frame = ttk.LabelFrame(self.left_pane_frame, text="Simulation Log")
         log_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True, side=tk.BOTTOM)
         self.log_text_widget = scrolledtext.ScrolledText(log_frame, height=15, wrap=tk.WORD, relief=tk.SOLID,
@@ -74,7 +183,6 @@ class BaseballApp:
         self.right_pane_notebook = ttk.Notebook(self.main_pane)
         self.main_pane.add(self.right_pane_notebook, weight=4)
 
-        # Standings Tab
         self.standings_tab_frame = ttk.Frame(self.right_pane_notebook)
         self.right_pane_notebook.add(self.standings_tab_frame, text='Standings')
         cols_standings = ("Team", "W", "L", "Win%", "ELO", "R", "RA", "Run Diff")
@@ -86,14 +194,12 @@ class BaseballApp:
             self.standings_treeview.column(col, width=85, anchor=tk.CENTER, stretch=tk.YES)
         self.standings_treeview.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # Player Statistics (Season) Tab
         self.player_stats_tab_frame = ttk.Frame(self.right_pane_notebook)
         self.right_pane_notebook.add(self.player_stats_tab_frame, text='Player Statistics (Season)')
         player_stats_pane = ttk.PanedWindow(self.player_stats_tab_frame, orient=tk.VERTICAL)
         player_stats_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         league_batting_frame = ttk.LabelFrame(player_stats_pane, text="League Batting Stats (Season)")
         player_stats_pane.add(league_batting_frame, weight=1)
-        # MODIFIED: Added "Year", "Set"
         self.cols_league_batting = ("Name", "Year", "Set", "Team", "Pos", "PA", "AB", "R", "H", "2B", "3B", "HR", "RBI",
                                     "BB", "SO", "AVG", "OBP", "SLG", "OPS")
         self.league_batting_stats_treeview = ttk.Treeview(league_batting_frame, columns=self.cols_league_batting,
@@ -110,7 +216,6 @@ class BaseballApp:
 
         league_pitching_frame = ttk.LabelFrame(player_stats_pane, text="League Pitching Stats (Season)")
         player_stats_pane.add(league_pitching_frame, weight=1)
-        # MODIFIED: Added "Year", "Set"
         self.cols_league_pitching = ("Name", "Year", "Set", "Team", "Role", "IP", "ERA", "WHIP", "BF", "K", "BB", "H",
                                      "R", "ER", "HR")
         self.league_pitching_stats_treeview = ttk.Treeview(league_pitching_frame, columns=self.cols_league_pitching,
@@ -125,14 +230,12 @@ class BaseballApp:
             self.league_pitching_stats_treeview.column(col, width=w, anchor=anchor, stretch=tk.YES)
         self.league_pitching_stats_treeview.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # Career Player Statistics Tab
         self.career_stats_tab_frame = ttk.Frame(self.right_pane_notebook)
         self.right_pane_notebook.add(self.career_stats_tab_frame, text='Player Statistics (Career)')
         career_stats_pane = ttk.PanedWindow(self.career_stats_tab_frame, orient=tk.VERTICAL)
         career_stats_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         career_batting_frame = ttk.LabelFrame(career_stats_pane, text="League Batting Stats (Career)")
         career_stats_pane.add(career_batting_frame, weight=1)
-        # Uses self.cols_league_batting which now includes Year/Set
         self.career_batting_stats_treeview = ttk.Treeview(career_batting_frame, columns=self.cols_league_batting,
                                                           show='headings', height=10)
         for col in self.cols_league_batting:
@@ -147,7 +250,6 @@ class BaseballApp:
 
         career_pitching_frame = ttk.LabelFrame(career_stats_pane, text="League Pitching Stats (Career)")
         career_stats_pane.add(career_pitching_frame, weight=1)
-        # Uses self.cols_league_pitching which now includes Year/Set
         self.career_pitching_stats_treeview = ttk.Treeview(career_pitching_frame, columns=self.cols_league_pitching,
                                                            show='headings', height=10)
         for col in self.cols_league_pitching:
@@ -217,7 +319,6 @@ class BaseballApp:
                 value = tv.set(k, col)
                 try:
                     numeric_cols = []
-                    # Define which columns are numeric for each specific treeview
                     if tv == self.standings_treeview:
                         numeric_cols = ["W", "L", "Win%", "ELO", "R", "RA", "Run Diff"]
                     elif tv == self.roster_batting_treeview:
@@ -252,7 +353,7 @@ class BaseballApp:
                             numeric_value = float('-inf')
                         elif value.lower() == "nan":
                             numeric_value = float('inf') if col == "ERA" else -1.0
-                        elif col == "Year":  # Treat Year as integer for sorting
+                        elif col == "Year":
                             numeric_value = int(cleaned_value) if cleaned_value.isdigit() else 0
                         else:
                             numeric_value = float(cleaned_value)
@@ -311,6 +412,9 @@ class BaseballApp:
 
     def update_button_states(self):
         current_state = self.app_state
+        self.clear_tournament_button.config(
+            state=tk.NORMAL if self.all_players_data and current_state != "LOADING_PLAYERS" else tk.DISABLED)
+
         if current_state in ["LOADING_PLAYERS", "INITIALIZING_TOURNAMENT", "SEASON_IN_PROGRESS",
                              "POSTSEASON_IN_PROGRESS"]:
             self.init_button.config(state=tk.DISABLED)
@@ -325,40 +429,82 @@ class BaseballApp:
             self.run_season_button.config(state=tk.DISABLED)
             self.run_postseason_button.config(state=tk.NORMAL if self.all_teams else tk.DISABLED)
 
+    def prompt_clear_tournament_data(self):
+        if self.app_state in ["LOADING_PLAYERS", "INITIALIZING_TOURNAMENT", "SEASON_IN_PROGRESS",
+                              "POSTSEASON_IN_PROGRESS"]:
+            messagebox.showwarning("Operation in Progress",
+                                   "Cannot clear tournament data while another operation is running.", parent=self.root)
+            return
+
+        if messagebox.askyesno("Confirm Clear",
+                               "Are you sure you want to clear all current tournament data and start over?\nThis cannot be undone.",
+                               parent=self.root):
+            self._clear_tournament_data_confirmed()
+
+    def _clear_tournament_data_confirmed(self):
+        self.log_message("Clearing all tournament data...")
+        self.all_teams = []
+        self.season_number = 0
+
+        for treeview in [self.standings_treeview,
+                         self.league_batting_stats_treeview, self.league_pitching_stats_treeview,
+                         self.career_batting_stats_treeview, self.career_pitching_stats_treeview,
+                         self.roster_batting_treeview, self.roster_pitching_treeview]:
+            for i in treeview.get_children():
+                treeview.delete(i)
+
+        self.log_text_widget.config(state=tk.NORMAL)
+        self.log_text_widget.delete('1.0', tk.END)
+        self.log_message("Tournament data cleared. Ready to initialize a new tournament.")  # Log after clearing
+        self._update_roster_tab_team_selector()
+        self._set_app_state("IDLE")
+
     def initialize_tournament_threaded(self):
         if not self.all_players_data:
             messagebox.showerror("Error", "Player data is not loaded. Cannot initialize teams.")
             self.log_message("Initialization aborted: Player data missing.")
             return
+
         self._set_app_state("INITIALIZING_TOURNAMENT")
-        self.log_message("Starting tournament initialization process...")
-        thread = threading.Thread(target=self._initialize_tournament_logic, daemon=True)
+        self.log_message("Opening team selection dialog...")
+
+        dialog = TeamSelectionDialog(self.root, self.num_teams_var.get())
+
+        selected_filepaths = dialog.selected_team_filepaths
+
+        if selected_filepaths is None:
+            self.log_message("Team selection cancelled by user.")
+            self._set_app_state("IDLE")
+            return
+
+        self.log_message(f"User selected {len(selected_filepaths)} teams. Proceeding with initialization...")
+        thread = threading.Thread(target=self._initialize_tournament_logic, args=(selected_filepaths,), daemon=True)
         thread.start()
 
-    def _initialize_tournament_logic(self):
+    def _initialize_tournament_logic(self, selected_team_filepaths):
         try:
             num_teams_to_init = self.num_teams_var.get()
-            self.log_message(f"Initializing {num_teams_to_init} teams...")
+            self.log_message(f"Initializing up to {num_teams_to_init} teams...")
             temp_teams = []
-            if os.path.exists(TEAMS_DIR) and os.path.isdir(TEAMS_DIR):
-                available_team_files = sorted(glob.glob(os.path.join(TEAMS_DIR, 'Team_*.json')))
-                for team_file in available_team_files:
-                    if len(temp_teams) >= num_teams_to_init: break
-                    team = load_team_from_json(team_file)
-                    if team: temp_teams.append(team)
-                self.log_message(f"Loaded {len(temp_teams)} existing teams from '{TEAMS_DIR}'.")
-            else:
-                self.log_message(
-                    f"Teams directory '{TEAMS_DIR}' not found or is not a directory. Skipping loading existing teams.")
+
+            for filepath in selected_team_filepaths:
+                team = load_team_from_json(filepath)
+                if team:
+                    temp_teams.append(team)
+                else:
+                    self.log_message(f"Warning: Failed to load selected team from {filepath}")
+            self.log_message(f"Loaded {len(temp_teams)} teams selected by user.")
+
             teams_to_generate = num_teams_to_init - len(temp_teams)
             if teams_to_generate > 0:
-                self.log_message(f"Need to generate {teams_to_generate} new teams.")
+                self.log_message(f"Need to generate {teams_to_generate} additional random teams.")
                 if not self.all_players_data:
                     self.log_message("ERROR: Cannot generate teams, all_players_data is not loaded.")
                     self.root.after(0, lambda: messagebox.showerror("Error",
                                                                     "Player data not available for team generation."))
                     self.root.after(0, lambda: self._set_app_state("IDLE"))
                     return
+
                 for i in range(teams_to_generate):
                     next_file_num = get_next_team_number(TEAMS_DIR)
                     actual_team_name = f"Random Team {next_file_num}"
@@ -374,8 +520,16 @@ class BaseballApp:
                     else:
                         self.log_message(f"ERROR: Failed to generate team: {actual_team_name}. Stopping generation.")
                         break
+
             self.all_teams = temp_teams
-            self.season_number = 1
+            self.season_number = 0
+
+            if self.all_teams:
+                self.log_message(f"Running initial preseason stat reset for all {len(self.all_teams)} teams...")
+                tournament_preseason(self.all_teams, log_callback=self.log_message)
+                self.season_number = 1
+                self.log_message(f"Initial preseason stat reset complete.")
+
             self.log_message(
                 f"Tournament initialized with {len(self.all_teams)} teams. Ready for Season {self.season_number}.")
             self.root.after(0, lambda: self.update_standings_display(self.all_teams))
@@ -400,12 +554,46 @@ class BaseballApp:
 
     def _run_season_logic(self):
         try:
-            self.log_message(f"--- Season {self.season_number}: Pre-season ---")
-            tournament_preseason(self.all_teams, log_callback=self.log_message)
-            self.log_message("Pre-season complete.")
+            if self.season_number > 1 or (self.season_number == 1 and not any(
+                    t.team_stats.games_played > 0 for t in self.all_teams if
+                    hasattr(t, 'team_stats') and t.team_stats)):
+                self.log_message(f"--- Season {self.season_number}: Pre-season ---")
+                tournament_preseason(self.all_teams, log_callback=self.log_message)
+                self.log_message("Pre-season complete.")
+            else:
+                self.log_message(
+                    f"--- Season {self.season_number}: Skipping pre-season (already run or first init). ---")
+
             self.log_message(f"--- Season {self.season_number}: Regular Season Playing ---")
             tournament_play_season(self.all_teams, log_callback=self.log_message)
             self.log_message("Regular season play complete.")
+
+            self.log_message("Saving updated team data after season...")
+            for team in self.all_teams:
+                team_base_name_for_file = team.name.replace(" ", "_")
+                team_num_match = re.search(r'Team (\d+)', team.name)
+                team_save_filepath = ""  # Initialize
+                if team_num_match:
+                    team_file_identifier = team_num_match.group(1)
+                    potential_files = glob.glob(os.path.join(TEAMS_DIR, f"Team_{team_file_identifier}_*.json"))
+                    if potential_files:
+                        team_save_filepath = potential_files[0]
+                        # self.log_message(f"  Overwriting existing file for {team.name}: {os.path.basename(team_save_filepath)}")
+                    else:
+                        team_save_filepath = os.path.join(TEAMS_DIR,
+                                                          f"Team_{team_file_identifier}_{team.total_points}.json")
+                        # self.log_message(f"  Saving new file for {team.name}: {os.path.basename(team_save_filepath)}")
+                else:
+                    team_save_filepath = os.path.join(TEAMS_DIR, f"{team_base_name_for_file}_{team.total_points}.json")
+                    # self.log_message(f"  Saving file for {team.name}: {os.path.basename(team_save_filepath)}")
+
+                if team_save_filepath:  # Ensure a path was determined
+                    save_team_to_json(team, team_save_filepath)
+                else:
+                    self.log_message(f"  Could not determine save path for team {team.name}. Team not saved.")
+
+            self.log_message("All team data saved.")
+
             self.root.after(0, lambda: self.update_standings_display(self.all_teams))
             self.root.after(0, lambda: self._update_league_player_stats_display(stats_source_attr='season_stats',
                                                                                 log_prefix="Season"))
@@ -422,7 +610,7 @@ class BaseballApp:
             messagebox.showwarning("Invalid State", "Cannot run postseason. Ensure a season has concluded.")
             return
         self._set_app_state("POSTSEASON_IN_PROGRESS")
-        self.log_message(f"--- Season {self.season_number}: Post-season Culling & Regeneration ---")
+        self.log_message(f"--- Season {self.season_number} Completed: Post-season Culling & Regeneration ---")
         thread = threading.Thread(target=self._run_postseason_and_prepare_logic, daemon=True)
         thread.start()
 
@@ -431,11 +619,14 @@ class BaseballApp:
             survivors = [team for team in self.all_teams if team.team_stats.wins >= team.team_stats.losses]
             num_eliminated = len(self.all_teams) - len(survivors)
             self.log_message(f"{num_eliminated} teams eliminated based on W/L record.")
+
             tournament_postseason_culling(survivors, log_callback=self.log_message)
             self.log_message("Survivor stats reset for next season.")
+
             self.all_teams = survivors
             num_teams_needed = self.num_teams_var.get()
             teams_to_regenerate = num_teams_needed - len(self.all_teams)
+
             if teams_to_regenerate > 0:
                 self.log_message(f"Regenerating {teams_to_regenerate} teams...")
                 if not self.all_players_data:
@@ -458,9 +649,11 @@ class BaseballApp:
                             self.log_message(
                                 f"ERROR: Failed to regenerate team: {actual_team_name}. Stopping regeneration.")
                             break
+
             self.season_number += 1
             self.log_message(
                 f"Postseason complete. Ready for Season {self.season_number} with {len(self.all_teams)} teams.")
+
             self.root.after(0, lambda: self.update_standings_display(self.all_teams))
             self.root.after(0, self._update_roster_tab_team_selector)
             self.root.after(0, lambda: self._update_league_player_stats_display(stats_source_attr='season_stats',
