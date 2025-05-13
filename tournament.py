@@ -134,16 +134,31 @@ def play_season(teams, log_callback=None):  # Added log_callback parameter
         log_callback(f"Season play complete. Total individual series played: {series_counter}.")
 
 
-def preseason(teams, log_callback=None):
+def preseason(teams, log_callback=None): # Renamed in GUI call to tournament_preseason
+    """
+    Resets team and ALL PLAYER season stats for the start of a new season.
+    """
     if log_callback: log_callback("Executing pre-season...")
     for team in teams:
-        # Ensure team_stats exists; it should be initialized with the Team object
+        # Reset team-level W/L, ELO, and team aggregate stats
         if not hasattr(team, 'team_stats') or team.team_stats is None:
-            from stats import TeamStats  # Assuming TeamStats is in stats.py
-            team.team_stats = TeamStats()
-        team.team_stats.reset_for_new_season()
-    if log_callback: log_callback("Pre-season complete. Team stats reset for the new season.")
-    # return teams # teams are modified in-place
+            team.team_stats = TeamStats() # Ensure team_stats object exists
+        team.team_stats.reset_for_new_season() # This resets TeamStats specific fields
+
+        # --- ADDED: Reset individual player season_stats ---
+        if log_callback: log_callback(f"  Resetting player season stats for {team.name}...")
+        all_players_on_team = team.batters + team.bench + team.all_pitchers
+        for player in all_players_on_team:
+            if hasattr(player, 'season_stats') and player.season_stats is not None:
+                player.season_stats.reset()
+            else:
+                # This case should ideally not happen if players are constructed correctly
+                player.season_stats = Stats() # Initialize if somehow missing
+                if log_callback: log_callback(f"    Warning: Re-initialized season_stats for {player.name} on {team.name}")
+        # --- END ADDED SECTION ---
+
+    if log_callback: log_callback("Pre-season complete. Team and player season stats reset.")
+    # teams are modified in-place, no need to return unless preferred
 
 
 def postseason(teams, log_callback=None):  # 'teams' here are the survivors

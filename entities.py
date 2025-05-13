@@ -331,7 +331,7 @@ class Team:
             pitcher.career_stats.add_stats(pitcher.game_stats)
             pitcher.team_name = self.name
             pitcher.game_stats.reset()
-        for batter in self.batters:
+        for batter in self.batters+self.bench:
             batter.season_stats.add_stats(batter.game_stats)
             batter.career_stats.add_stats(batter.game_stats)
             batter.team_name = self.name

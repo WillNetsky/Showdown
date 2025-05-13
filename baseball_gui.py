@@ -31,7 +31,7 @@ class BaseballApp:
     def __init__(self, root_window):
         self.root = root_window
         self.root.title("Baseball Simulator GUI")
-        self.root.geometry("1250x850")
+        self.root.geometry("1350x850")  # Adjusted size for new columns
 
         self.all_teams = []
         self.season_number = 0
@@ -74,6 +74,7 @@ class BaseballApp:
         self.right_pane_notebook = ttk.Notebook(self.main_pane)
         self.main_pane.add(self.right_pane_notebook, weight=4)
 
+        # Standings Tab
         self.standings_tab_frame = ttk.Frame(self.right_pane_notebook)
         self.right_pane_notebook.add(self.standings_tab_frame, text='Standings')
         cols_standings = ("Team", "W", "L", "Win%", "ELO", "R", "RA", "Run Diff")
@@ -85,39 +86,79 @@ class BaseballApp:
             self.standings_treeview.column(col, width=85, anchor=tk.CENTER, stretch=tk.YES)
         self.standings_treeview.pack(fill="both", expand=True, padx=5, pady=5)
 
+        # Player Statistics (Season) Tab
         self.player_stats_tab_frame = ttk.Frame(self.right_pane_notebook)
-        self.right_pane_notebook.add(self.player_stats_tab_frame, text='Player Statistics (League-wide)')
+        self.right_pane_notebook.add(self.player_stats_tab_frame, text='Player Statistics (Season)')
         player_stats_pane = ttk.PanedWindow(self.player_stats_tab_frame, orient=tk.VERTICAL)
         player_stats_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         league_batting_frame = ttk.LabelFrame(player_stats_pane, text="League Batting Stats (Season)")
         player_stats_pane.add(league_batting_frame, weight=1)
-        self.cols_league_batting = ("Name", "Team", "Pos", "PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO",
-                                    "AVG", "OBP", "SLG", "OPS")
+        # MODIFIED: Added "Year", "Set"
+        self.cols_league_batting = ("Name", "Year", "Set", "Team", "Pos", "PA", "AB", "R", "H", "2B", "3B", "HR", "RBI",
+                                    "BB", "SO", "AVG", "OBP", "SLG", "OPS")
         self.league_batting_stats_treeview = ttk.Treeview(league_batting_frame, columns=self.cols_league_batting,
                                                           show='headings', height=10)
         for col in self.cols_league_batting:
-            w = 130 if col == "Name" else (80 if col == "Team" else (
-                40 if col in ["Pos", "PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO"] else 60))
-            anchor = tk.W if col in ["Name", "Team"] else tk.CENTER
+            w = 120 if col == "Name" else (50 if col == "Year" else (70 if col == "Set" else (80 if col == "Team" else (
+                40 if col in ["Pos", "PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO"] else 60))))
+            anchor = tk.W if col in ["Name", "Team", "Set"] else tk.CENTER
             self.league_batting_stats_treeview.heading(col, text=col,
                                                        command=lambda _col=col: self._treeview_sort_column(
                                                            self.league_batting_stats_treeview, _col, False))
             self.league_batting_stats_treeview.column(col, width=w, anchor=anchor, stretch=tk.YES)
         self.league_batting_stats_treeview.pack(fill="both", expand=True, padx=5, pady=5)
+
         league_pitching_frame = ttk.LabelFrame(player_stats_pane, text="League Pitching Stats (Season)")
         player_stats_pane.add(league_pitching_frame, weight=1)
-        self.cols_league_pitching = ("Name", "Team", "Role", "IP", "ERA", "WHIP", "BF", "K", "BB", "H", "R", "ER", "HR")
+        # MODIFIED: Added "Year", "Set"
+        self.cols_league_pitching = ("Name", "Year", "Set", "Team", "Role", "IP", "ERA", "WHIP", "BF", "K", "BB", "H",
+                                     "R", "ER", "HR")
         self.league_pitching_stats_treeview = ttk.Treeview(league_pitching_frame, columns=self.cols_league_pitching,
                                                            show='headings', height=10)
         for col in self.cols_league_pitching:
-            w = 130 if col == "Name" else (
-                80 if col == "Team" else (45 if col in ["Role", "IP", "BF", "K", "BB", "H", "R", "ER", "HR"] else 60))
-            anchor = tk.W if col in ["Name", "Team"] else tk.CENTER
+            w = 120 if col == "Name" else (50 if col == "Year" else (70 if col == "Set" else (
+                80 if col == "Team" else (45 if col in ["Role", "IP", "BF", "K", "BB", "H", "R", "ER", "HR"] else 60))))
+            anchor = tk.W if col in ["Name", "Team", "Set"] else tk.CENTER
             self.league_pitching_stats_treeview.heading(col, text=col,
                                                         command=lambda _col=col: self._treeview_sort_column(
                                                             self.league_pitching_stats_treeview, _col, False))
             self.league_pitching_stats_treeview.column(col, width=w, anchor=anchor, stretch=tk.YES)
         self.league_pitching_stats_treeview.pack(fill="both", expand=True, padx=5, pady=5)
+
+        # Career Player Statistics Tab
+        self.career_stats_tab_frame = ttk.Frame(self.right_pane_notebook)
+        self.right_pane_notebook.add(self.career_stats_tab_frame, text='Player Statistics (Career)')
+        career_stats_pane = ttk.PanedWindow(self.career_stats_tab_frame, orient=tk.VERTICAL)
+        career_stats_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        career_batting_frame = ttk.LabelFrame(career_stats_pane, text="League Batting Stats (Career)")
+        career_stats_pane.add(career_batting_frame, weight=1)
+        # Uses self.cols_league_batting which now includes Year/Set
+        self.career_batting_stats_treeview = ttk.Treeview(career_batting_frame, columns=self.cols_league_batting,
+                                                          show='headings', height=10)
+        for col in self.cols_league_batting:
+            w = 120 if col == "Name" else (50 if col == "Year" else (70 if col == "Set" else (80 if col == "Team" else (
+                40 if col in ["Pos", "PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO"] else 60))))
+            anchor = tk.W if col in ["Name", "Team", "Set"] else tk.CENTER
+            self.career_batting_stats_treeview.heading(col, text=col,
+                                                       command=lambda _col=col: self._treeview_sort_column(
+                                                           self.career_batting_stats_treeview, _col, False))
+            self.career_batting_stats_treeview.column(col, width=w, anchor=anchor, stretch=tk.YES)
+        self.career_batting_stats_treeview.pack(fill="both", expand=True, padx=5, pady=5)
+
+        career_pitching_frame = ttk.LabelFrame(career_stats_pane, text="League Pitching Stats (Career)")
+        career_stats_pane.add(career_pitching_frame, weight=1)
+        # Uses self.cols_league_pitching which now includes Year/Set
+        self.career_pitching_stats_treeview = ttk.Treeview(career_pitching_frame, columns=self.cols_league_pitching,
+                                                           show='headings', height=10)
+        for col in self.cols_league_pitching:
+            w = 120 if col == "Name" else (50 if col == "Year" else (70 if col == "Set" else (
+                80 if col == "Team" else (45 if col in ["Role", "IP", "BF", "K", "BB", "H", "R", "ER", "HR"] else 60))))
+            anchor = tk.W if col in ["Name", "Team", "Set"] else tk.CENTER
+            self.career_pitching_stats_treeview.heading(col, text=col,
+                                                        command=lambda _col=col: self._treeview_sort_column(
+                                                            self.career_pitching_stats_treeview, _col, False))
+            self.career_pitching_stats_treeview.column(col, width=w, anchor=anchor, stretch=tk.YES)
+        self.career_pitching_stats_treeview.pack(fill="both", expand=True, padx=5, pady=5)
 
         self.roster_tab_frame = ttk.Frame(self.right_pane_notebook)
         self.right_pane_notebook.add(self.roster_tab_frame, text='Team Rosters & Stats')
@@ -175,36 +216,44 @@ class BaseballApp:
             for k in tv.get_children(''):
                 value = tv.set(k, col)
                 try:
-                    numeric_cols_standings = ["W", "L", "Win%", "ELO", "R", "RA", "Run Diff"]
-                    numeric_cols_batting_roster = ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO", "AVG",
-                                                   "OBP", "SLG", "OPS"]
-                    numeric_cols_pitching_roster = ["IP", "ERA", "WHIP", "BF", "K", "BB", "H", "R", "ER", "HR"]
-                    numeric_cols_league_batting = numeric_cols_batting_roster
-                    numeric_cols_league_pitching = numeric_cols_pitching_roster
-                    is_numeric_col = False
-                    if tv == self.standings_treeview and col in numeric_cols_standings:
-                        is_numeric_col = True
-                    elif tv == self.roster_batting_treeview and col in numeric_cols_batting_roster:
-                        is_numeric_col = True
-                    elif tv == self.roster_pitching_treeview and col in numeric_cols_pitching_roster:
-                        is_numeric_col = True
-                    elif tv == self.league_batting_stats_treeview and col in numeric_cols_league_batting:
-                        is_numeric_col = True
-                    elif tv == self.league_pitching_stats_treeview and col in numeric_cols_league_pitching:
-                        is_numeric_col = True
+                    numeric_cols = []
+                    # Define which columns are numeric for each specific treeview
+                    if tv == self.standings_treeview:
+                        numeric_cols = ["W", "L", "Win%", "ELO", "R", "RA", "Run Diff"]
+                    elif tv == self.roster_batting_treeview:
+                        numeric_cols = ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO", "AVG", "OBP", "SLG",
+                                        "OPS", "Year"]
+                    elif tv == self.roster_pitching_treeview:
+                        numeric_cols = ["IP", "ERA", "WHIP", "BF", "K", "BB", "H", "R", "ER", "HR", "Year"]
+                    elif tv == self.league_batting_stats_treeview:
+                        numeric_cols = ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO", "AVG", "OBP", "SLG",
+                                        "OPS", "Year"]
+                    elif tv == self.career_batting_stats_treeview:
+                        numeric_cols = ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO", "AVG", "OBP", "SLG",
+                                        "OPS", "Year"]
+                    elif tv == self.league_pitching_stats_treeview:
+                        numeric_cols = ["IP", "ERA", "WHIP", "BF", "K", "BB", "H", "R", "ER", "HR", "Year"]
+                    elif tv == self.career_pitching_stats_treeview:
+                        numeric_cols = ["IP", "ERA", "WHIP", "BF", "K", "BB", "H", "R", "ER", "HR", "Year"]
+
+                    is_numeric_col = col in numeric_cols
+
                     if is_numeric_col:
                         cleaned_value = value.replace('%', '').replace('+', '')
                         if col == "IP" and '.' in cleaned_value:
                             parts = cleaned_value.split('.')
                             numeric_value = float(parts[0]) + (float(parts[1]) / 3.0) if len(parts) == 2 and parts[
-                                1] else float(parts[0])
+                                1].isdigit() else float(parts[0])
                         elif col in ["AVG", "OBP", "SLG", "OPS"] and value.startswith("."):
-                            numeric_value = float(value) if value != ".---" else -1
-                        elif value.lower() == "inf" or value.lower() == "-inf" or value.lower() == "nan":
-                            numeric_value = float('inf') if value.lower() == "inf" else (
-                                float('-inf') if value.lower() == "-inf" else 99999.0)
-                            if col not in ["ERA"]:
-                                numeric_value = -1.0 if value.lower() == "nan" else numeric_value
+                            numeric_value = float(value) if value != ".---" else -1.0
+                        elif value.lower() == "inf":
+                            numeric_value = float('inf')
+                        elif value.lower() == "-inf":
+                            numeric_value = float('-inf')
+                        elif value.lower() == "nan":
+                            numeric_value = float('inf') if col == "ERA" else -1.0
+                        elif col == "Year":  # Treat Year as integer for sorting
+                            numeric_value = int(cleaned_value) if cleaned_value.isdigit() else 0
                         else:
                             numeric_value = float(cleaned_value)
                         data_list.append((numeric_value, k))
@@ -212,9 +261,15 @@ class BaseballApp:
                         data_list.append((value.lower(), k))
                 except ValueError:
                     data_list.append((value.lower(), k))
-            data_list.sort(key=lambda t: t[0], reverse=reverse)
+
+            if col == "ERA":
+                data_list.sort(key=lambda t: t[0], reverse=not reverse)
+            else:
+                data_list.sort(key=lambda t: t[0], reverse=reverse)
+
             for index, (val, k) in enumerate(data_list):
                 tv.move(k, '', index)
+
             tv.heading(col, command=lambda _col=col: self._treeview_sort_column(tv, _col, not reverse))
         except tk.TclError as e:
             self.log_message(f"Warning: TclError while sorting column {col}: {e}.")
@@ -325,6 +380,9 @@ class BaseballApp:
                 f"Tournament initialized with {len(self.all_teams)} teams. Ready for Season {self.season_number}.")
             self.root.after(0, lambda: self.update_standings_display(self.all_teams))
             self.root.after(0, self._update_roster_tab_team_selector)
+            self.root.after(0, lambda: self._update_league_player_stats_display(stats_source_attr='season_stats',
+                                                                                log_prefix="Season"))
+            self.root.after(0, self._update_career_player_stats_display)
             self.root.after(0, lambda: self._set_app_state("IDLE"))
         except Exception as e:
             self.log_message(f"Error during initialization: {e}")
@@ -349,7 +407,9 @@ class BaseballApp:
             tournament_play_season(self.all_teams, log_callback=self.log_message)
             self.log_message("Regular season play complete.")
             self.root.after(0, lambda: self.update_standings_display(self.all_teams))
-            self.root.after(0, self._update_league_player_stats_display)
+            self.root.after(0, lambda: self._update_league_player_stats_display(stats_source_attr='season_stats',
+                                                                                log_prefix="Season"))
+            self.root.after(0, self._update_career_player_stats_display)
             self.root.after(0, self._update_roster_tab_team_selector)
             self.root.after(0, lambda: self._set_app_state("SEASON_CONCLUDED"))
         except Exception as e:
@@ -403,6 +463,9 @@ class BaseballApp:
                 f"Postseason complete. Ready for Season {self.season_number} with {len(self.all_teams)} teams.")
             self.root.after(0, lambda: self.update_standings_display(self.all_teams))
             self.root.after(0, self._update_roster_tab_team_selector)
+            self.root.after(0, lambda: self._update_league_player_stats_display(stats_source_attr='season_stats',
+                                                                                log_prefix="Season"))
+            self.root.after(0, self._update_career_player_stats_display)
             self.root.after(0, lambda: self._set_app_state("IDLE"))
         except Exception as e:
             self.log_message(f"Error during postseason preparation: {e}")
@@ -416,82 +479,100 @@ class BaseballApp:
         if not teams_to_display:
             self.log_message("No teams to display in standings.")
             return
-
-        # Ensure team_stats objects exist and are the correct type
         valid_teams_to_display = []
         for team in teams_to_display:
             if hasattr(team, 'team_stats') and team.team_stats is not None:
                 valid_teams_to_display.append(team)
             else:
                 self.log_message(f"Warning: Team {team.name} missing team_stats. Skipping from standings.")
-
         sorted_teams = sorted(valid_teams_to_display, key=lambda t: (t.team_stats.wins, t.team_stats.elo_rating),
                               reverse=True)
-
         for team in sorted_teams:
-            stats = team.team_stats  # Now we are sure stats exists
+            stats = team.team_stats
             win_pct_str = f".{int(stats.calculate_win_pct() * 1000):03d}" if stats.games_played > 0 else ".000"
             elo_str = f"{stats.elo_rating:.0f}"
             values = (team.name, stats.wins, stats.losses, win_pct_str,
                       elo_str,
-                      stats.team_runs_scored,  # MODIFIED: Use team_runs_scored
-                      stats.team_runs_allowed,  # MODIFIED: Use team_runs_allowed
+                      stats.team_runs_scored,
+                      stats.team_runs_allowed,
                       stats.run_differential)
             self.standings_treeview.insert("", tk.END, values=values)
         self.log_message("Standings display updated.")
 
-    def _update_league_player_stats_display(self):
-        self.log_message("Updating league-wide player statistics...", internal=True)
-        for i in self.league_batting_stats_treeview.get_children():
-            self.league_batting_stats_treeview.delete(i)
-        for i in self.league_pitching_stats_treeview.get_children():
-            self.league_pitching_stats_treeview.delete(i)
+    def _update_league_player_stats_display(self, stats_source_attr='season_stats', batting_treeview=None,
+                                            pitching_treeview=None, log_prefix="Season"):
+        if batting_treeview is None: batting_treeview = self.league_batting_stats_treeview
+        if pitching_treeview is None: pitching_treeview = self.league_pitching_stats_treeview
+
+        self.log_message(f"Updating league-wide player {log_prefix.lower()} statistics...", internal=True)
+        for i in batting_treeview.get_children(): batting_treeview.delete(i)
+        for i in pitching_treeview.get_children(): pitching_treeview.delete(i)
+
         if not self.all_teams:
-            self.log_message("No teams available to display league player stats.")
+            self.log_message(f"No teams available to display league player {log_prefix.lower()} stats.")
             return
-        all_league_players = []
+
+        unique_player_objects = set()
         for team_obj in self.all_teams:
-            all_league_players.extend(team_obj.batters)
-            all_league_players.extend(team_obj.bench)
-            all_league_players.extend(team_obj.all_pitchers)
+            unique_player_objects.update(team_obj.batters)
+            unique_player_objects.update(team_obj.bench)
+            unique_player_objects.update(team_obj.all_pitchers)
+
+        all_league_players_list = list(unique_player_objects)
         batting_entries = []
         pitching_entries = []
-        for player in all_league_players:
-            if not hasattr(player, 'season_stats') or player.season_stats is None:
-                player.season_stats = Stats()
+
+        for player in all_league_players_list:
+            player_stats = getattr(player, stats_source_attr, None)
+            if player_stats is None:
+                player_stats = Stats()
+                setattr(player, stats_source_attr, player_stats)
+
             team_name = player.team_name if hasattr(player, 'team_name') and player.team_name else "N/A"
+            player_year = player.year if hasattr(player, 'year') and player.year else ""
+            player_set = player.set if hasattr(player, 'set') and player.set else ""
+
             if isinstance(player, Batter):
-                player.season_stats.update_hits()
+                player_stats.update_hits()
                 batting_values = (
-                    player.name, team_name, player.position,
-                    player.season_stats.plate_appearances, player.season_stats.at_bats,
-                    player.season_stats.runs_scored, player.season_stats.hits,
-                    player.season_stats.doubles, player.season_stats.triples,
-                    player.season_stats.home_runs, player.season_stats.rbi,
-                    player.season_stats.walks, player.season_stats.strikeouts,
-                    player.season_stats.calculate_avg(), player.season_stats.calculate_obp(),
-                    player.season_stats.calculate_slg(), player.season_stats.calculate_ops()
+                    player.name, player_year, player_set, team_name, player.position,
+                    player_stats.plate_appearances, player_stats.at_bats,
+                    player_stats.runs_scored, player_stats.hits,
+                    player_stats.doubles, player_stats.triples,
+                    player_stats.home_runs, player_stats.rbi,
+                    player_stats.walks, player_stats.strikeouts,
+                    player_stats.calculate_avg(), player_stats.calculate_obp(),
+                    player_stats.calculate_slg(), player_stats.calculate_ops()
                 )
                 batting_entries.append(batting_values)
+
             elif isinstance(player, Pitcher):
-                era_val = player.season_stats.calculate_era()
-                whip_val = player.season_stats.calculate_whip()
+                era_val = player_stats.calculate_era()
+                whip_val = player_stats.calculate_whip()
                 pitching_values = (
-                    player.name, team_name, player.team_role or player.position,
-                    player.season_stats.get_formatted_ip(),
+                    player.name, player_year, player_set, team_name, player.team_role or player.position,
+                    player_stats.get_formatted_ip(),
                     f"{era_val:.2f}" if era_val != float('inf') else "INF",
                     f"{whip_val:.2f}" if whip_val != float('inf') else "INF",
-                    player.season_stats.batters_faced, player.season_stats.strikeouts_thrown,
-                    player.season_stats.walks_allowed, player.season_stats.hits_allowed,
-                    player.season_stats.runs_allowed, player.season_stats.earned_runs_allowed,
-                    player.season_stats.home_runs_allowed
+                    player_stats.batters_faced, player_stats.strikeouts_thrown,
+                    player_stats.walks_allowed, player_stats.hits_allowed,
+                    player_stats.runs_allowed, player_stats.earned_runs_allowed,
+                    player_stats.home_runs_allowed
                 )
                 pitching_entries.append(pitching_values)
-        for entry in batting_entries:
-            self.league_batting_stats_treeview.insert("", tk.END, values=entry)
-        for entry in pitching_entries:
-            self.league_pitching_stats_treeview.insert("", tk.END, values=entry)
-        self.log_message("League-wide player statistics updated.")
+
+        for entry in batting_entries: batting_treeview.insert("", tk.END, values=entry)
+        for entry in pitching_entries: pitching_treeview.insert("", tk.END, values=entry)
+
+        self.log_message(f"League-wide player {log_prefix.lower()} statistics updated.")
+
+    def _update_career_player_stats_display(self):
+        self._update_league_player_stats_display(
+            stats_source_attr='career_stats',
+            batting_treeview=self.career_batting_stats_treeview,
+            pitching_treeview=self.career_pitching_stats_treeview,
+            log_prefix="Career"
+        )
 
     def _update_roster_tab_team_selector(self):
         self.log_message("Updating team selector for roster tab...", internal=True)
