@@ -1,52 +1,56 @@
 # optimizer_ga.py
 import random
-import copy  # For deep copying individuals if necessary
+import copy
 
 from entities import Team, Batter, Pitcher
 from stats import Stats, TeamStats
-from team_management import create_random_team  # To generate initial population and new individuals
-from game_logic import play_game  # For fitness evaluation
+from team_management import create_random_team
+from game_logic import play_game
 
-
-# --- GA Configuration Constants ---
-# These can be made configurable in the GUI later
-# POPULATION_SIZE = 50
-# NUM_GENERATIONS = 100
-# MUTATION_RATE_PER_TEAM = 0.8 # Probability that a selected individual will be mutated
-# MUTATION_SWAPS_PER_TEAM = 1  # Number of players to try swapping during a mutation event
-# ELITISM_COUNT = 5            # Number of best individuals to carry to next generation
-# NUM_BENCHMARK_TEAMS = 5      # How many random teams to test fitness against
-# GAMES_PER_EVALUATION = 10    # Games to play against each benchmark team (half home/away)
-# IMMIGRATION_RATE = 0.1       # Percentage of population to be new random individuals
 
 class GACandidate:
-    """Wraps a Team object with its fitness score."""
+    """Wraps a Team object with its fitness score (now Run Differential)."""
 
-    def __init__(self, team_object: Team):
+    def __init__(self, team_object: Team, is_newly_created=True):
         self.team = team_object
-        self.fitness = 0.0  # Win percentage
+        self.fitness = 0.0  # Now represents total Run Differential from evaluation games
 
-    def __lt__(self, other):  # For sorting by fitness
-        return self.fitness < other.fitness
+        if not hasattr(self.team, 'team_stats') or self.team.team_stats is None:
+            self.team.team_stats = TeamStats()
+        original_elo = self.team.team_stats.elo_rating
+        self.team.team_stats.reset_for_new_season(maintain_elo=True)
+        self.team.team_stats.elo_rating = original_elo
+
+        for p in (self.team.batters + self.team.bench + self.team.all_pitchers):
+            if not hasattr(p, 'season_stats') or p.season_stats is None or is_newly_created:
+                p.season_stats = Stats()
+            else:
+                p.season_stats.reset()
+            if not hasattr(p, 'career_stats') or p.career_stats is None:
+                p.career_stats = Stats()
+
+    def __lt__(self, other):
+        return self.fitness < other.fitness  # Higher run differential is better
 
     def __repr__(self):
-        return f"GACandidate({self.team.name}, Fitness: {self.fitness:.4f})"
+        return f"GACandidate({self.team.name}, Fitness (RunDiff): {self.fitness:.0f})"
 
 
 class GeneticTeamOptimizer:
     def __init__(self, all_players_list,
-                 population_size=20,  # Smaller for faster testing
-                 num_generations=10,  # Fewer for faster testing
-                 mutation_rate=0.7,
-                 num_mutation_swaps=1,
-                 elitism_count=2,
-                 num_benchmark_teams=3,
-                 games_per_benchmark_team=6,  # Total games = num_benchmark_teams * games_per_benchmark_team
+                 population_size=30,  # Slightly increased default
+                 num_generations=20,  # Slightly increased default
+                 mutation_rate=0.8,  # Increased default
+                 num_mutation_swaps=1,  # Can try 1-2
+                 elitism_count=3,  # Increased default
+                 num_benchmark_teams=5,  # Increased default
+                 games_per_benchmark_team=10,  # Increased (Total eval games = 5 * 10 = 50 per candidate)
                  immigration_rate=0.1,
-                 min_team_points=4500,  # From constants
-                 max_team_points=5000,  # From constants
+                 min_team_points=4500,
+                 max_team_points=5000,
                  log_callback=None,
-                 update_progress_callback=None):  # For GUI progress bar
+                 update_progress_callback=None,
+                 stop_event=None):
 
         self.all_players = all_players_list
         self.population_size = population_size
@@ -55,14 +59,14 @@ class GeneticTeamOptimizer:
         self.num_mutation_swaps = num_mutation_swaps
         self.elitism_count = elitism_count
         self.num_benchmark_teams = num_benchmark_teams
-        self.games_per_benchmark_team = games_per_benchmark_team  # Total games per candidate team
-        self.immigration_rate = immigration_rate  # Percentage of new random individuals per generation
+        self.games_per_benchmark_team = games_per_benchmark_team
+        self.immigration_rate = immigration_rate
         self.min_points = min_team_points
         self.max_points = max_team_points
+        self.stop_event = stop_event
 
         self.log_callback = log_callback if callable(log_callback) else print
-        self.update_progress_callback = update_progress_callback if callable(update_progress_callback) else lambda p,
-                                                                                                                   m: None
+        self.update_progress_callback = update_progress_callback if callable(update_progress_callback) else lambda p, m: None
 
         self.population = []
         self.benchmark_teams = []
@@ -79,146 +83,176 @@ class GeneticTeamOptimizer:
         self._log(f"Initializing population of {self.population_size} teams...")
         self.population = []
         attempts = 0
-        max_attempts_per_team = 50  # Prevent infinite loop if create_random_team struggles
+        max_attempts_per_team = self.population_size * 10
 
-        while len(self.population) < self.population_size and attempts < self.population_size * max_attempts_per_team:
+        while len(self.population) < self.population_size and attempts < max_attempts_per_team:
+            if self.stop_event and self.stop_event.is_set():
+                self._log("Stop requested during population initialization.")
+                return False
             team_name = f"GA_Team_Init_{len(self.population) + 1}"
-            # Ensure create_random_team is robust and uses min_points, max_points correctly
             team_obj = create_random_team(self.all_players, team_name, self.min_points, self.max_points)
             if team_obj:
-                self.population.append(GACandidate(team_obj))
+                self.population.append(GACandidate(team_obj, is_newly_created=True))
             attempts += 1
 
         if len(self.population) < self.population_size:
             self._log(f"Warning: Could only initialize {len(self.population)}/{self.population_size} teams.")
             if not self.population:
                 raise ValueError("Failed to initialize any teams for the GA population.")
-        self._log("Population initialized.")
+        self._log(f"Population initialized with {len(self.population)} teams.")
+        return True
 
     def _generate_benchmark_teams(self):
         self._log(f"Generating {self.num_benchmark_teams} benchmark teams...")
         self.benchmark_teams = []
         attempts = 0
-        max_attempts_per_team = 50
+        max_attempts_per_team = self.num_benchmark_teams * 10
 
-        while len(
-                self.benchmark_teams) < self.num_benchmark_teams and attempts < self.num_benchmark_teams * max_attempts_per_team:
+        while len(self.benchmark_teams) < self.num_benchmark_teams and attempts < max_attempts_per_team:
+            if self.stop_event and self.stop_event.is_set():
+                self._log("Stop requested during benchmark team generation.")
+                return False
             team_name = f"Benchmark_{len(self.benchmark_teams) + 1}"
             team_obj = create_random_team(self.all_players, team_name, self.min_points, self.max_points)
             if team_obj:
-                # Reset stats for benchmark teams to ensure fair evaluation
-                if hasattr(team_obj, 'team_stats') and team_obj.team_stats is not None:
-                    team_obj.team_stats.reset_for_new_season(maintain_elo=False)  # Start benchmark ELO fresh
+                if not hasattr(team_obj, 'team_stats') or team_obj.team_stats is None: team_obj.team_stats = TeamStats()
+                team_obj.team_stats.reset_for_new_season(maintain_elo=False)
                 for p in (team_obj.batters + team_obj.bench + team_obj.all_pitchers):
-                    if hasattr(p, 'season_stats'): p.season_stats.reset()
-                    if hasattr(p, 'career_stats'): p.career_stats.reset()  # Reset career for benchmark context
+                    if not hasattr(p, 'season_stats') or p.season_stats is None:
+                        p.season_stats = Stats()
+                    else:
+                        p.season_stats.reset()
+                    if not hasattr(p, 'career_stats') or p.career_stats is None:
+                        p.career_stats = Stats()
+                    else:
+                        p.career_stats.reset()
                 self.benchmark_teams.append(team_obj)
             attempts += 1
 
         if not self.benchmark_teams:
             raise ValueError("Failed to generate any benchmark teams. GA cannot proceed.")
         self.log_callback(f"Generated {len(self.benchmark_teams)} benchmark teams.")
+        return True
 
     def _calculate_fitness(self, candidate: GACandidate):
-        """Simulates games for a candidate team against benchmark teams."""
         candidate_team = candidate.team
-        total_wins = 0
+        total_run_differential_for_candidate = 0  # MODIFIED: Track run differential
         total_games_played = 0
 
-        # Reset candidate team's season stats before evaluation for this generation
-        if hasattr(candidate_team, 'team_stats') and candidate_team.team_stats is not None:
-            candidate_team.team_stats.reset_for_new_season(maintain_elo=True)  # Maintain ELO for candidate
-        for p in (candidate_team.batters + candidate_team.bench + candidate_team.all_pitchers):
-            if hasattr(p, 'season_stats'): p.season_stats.reset()
-            # Career stats are not reset here as they are cumulative across GA generations for the individual lineage
+        candidate_team.team_stats.reset_for_new_season(maintain_elo=True,
+                                                       team_name_for_debug=candidate_team.name + "_GA_Eval")
 
-        for benchmark_team in self.benchmark_teams:
-            games_this_opponent = self.games_per_benchmark_team // len(self.benchmark_teams)  # Distribute games
-            if games_this_opponent == 0 and self.games_per_benchmark_team > 0: games_this_opponent = 1  # Play at least one game if total > 0
+        # Player season_stats are already fresh due to GACandidate constructor or _mutate logic
+        # self._log(f"  Evaluating fitness for {candidate_team.name} (ELO: {candidate_team.team_stats.elo_rating:.0f})...")
+
+        for benchmark_idx, benchmark_team in enumerate(self.benchmark_teams):
+            if self.stop_event and self.stop_event.is_set():
+                self._log(f"Stop requested during fitness calculation for {candidate_team.name}.")
+                return
+
+            base_games = self.games_per_benchmark_team // self.num_benchmark_teams
+            extra_games = self.games_per_benchmark_team % self.num_benchmark_teams
+            games_this_opponent = base_games + (1 if benchmark_idx < extra_games else 0)
 
             for i in range(games_this_opponent):
-                # Simulate game (e.g., candidate is home for half, away for half)
-                # For simplicity, let's alternate. A more robust way might be to play fixed home/away counts.
-                if i % 2 == 0:  # Candidate is home
-                    _, home_result, _, _, _ = play_game(benchmark_team, candidate_team)  # benchmark is away
-                    if home_result.get('win', False):
-                        total_wins += 1
-                else:  # Candidate is away
-                    away_result, _, _, _, _ = play_game(candidate_team, benchmark_team)  # candidate is away
-                    if away_result.get('win', False):
-                        total_wins += 1
+                if self.stop_event and self.stop_event.is_set():
+                    self._log(f"Stop requested during game simulation for {candidate_team.name}.")
+                    return
+
+                for p_list in [candidate_team.batters, candidate_team.bench, candidate_team.all_pitchers,
+                               benchmark_team.batters, benchmark_team.bench, benchmark_team.all_pitchers]:
+                    for p in p_list:
+                        if hasattr(p, 'game_stats'):
+                            p.game_stats.reset()
+                        else:
+                            p.game_stats = Stats()
+
+                if i % 2 == 0:
+                    away_res, home_res, _, _, _ = play_game(benchmark_team, candidate_team)
+                    # For candidate (home_team): RD = home_runs_scored - home_runs_allowed
+                    total_run_differential_for_candidate += (
+                            home_res.get('runs_scored', 0) - home_res.get('runs_allowed', 0))
+                else:
+                    away_res, home_res, _, _, _ = play_game(candidate_team, benchmark_team)
+                    # For candidate (away_team): RD = away_runs_scored - away_runs_allowed
+                    total_run_differential_for_candidate += (
+                            away_res.get('runs_scored', 0) - away_res.get('runs_allowed', 0))
                 total_games_played += 1
 
-        candidate.fitness = (total_wins / total_games_played) if total_games_played > 0 else 0.0
-        # self._log(f"  Fitness for {candidate_team.name}: {candidate.fitness:.4f} ({total_wins}/{total_games_played})")
+                candidate_team.post_game_team_cleanup()
+                benchmark_team.post_game_team_cleanup()
+
+        candidate.fitness = total_run_differential_for_candidate  # Fitness is now total RD
+        # self._log(f"  Fitness (RunDiff) for {candidate_team.name}: {candidate.fitness:.0f} ({total_games_played} games)")
 
     def _select_parents_tournament(self, k=3):
-        """Selects two parents using tournament selection."""
         parents = []
-        for _ in range(2):  # Select two parents
-            tournament_participants = random.sample(self.population, k)
-            winner = max(tournament_participants, key=lambda ind: ind.fitness)
+        for _ in range(2):
+            actual_k = min(k, len(self.population))
+            if actual_k == 0: return None, None
+            if actual_k == 1 and len(self.population) == 1:
+                parents.append(self.population[0])
+                continue
+            if not self.population: return None, None
+            tournament_participants = random.sample(self.population, actual_k)
+            winner = max(tournament_participants, key=lambda ind: ind.fitness)  # Max RD is better
             parents.append(winner)
-        return parents[0], parents[1]  # parent1, parent2
+        if len(parents) < 2 and len(parents) == 1:
+            return parents[0], parents[0]
+        elif not parents:
+            return None, None
+        return parents[0], parents[1]
 
-    def _mutate(self, candidate: GACandidate):
-        """
-        Mutates a team by attempting to swap a few players.
-        Ensures the team remains valid regarding roster rules and point caps.
-        """
-        team_to_mutate = copy.deepcopy(candidate.team)  # Work on a copy
-        mutated_successfully = False
+    def _mutate(self, parent_candidate: GACandidate):
+        mutated_team_obj = copy.deepcopy(parent_candidate.team)
+        mutated_team_obj.name = f"GA_Mut_{parent_candidate.team.name.split('_')[-1]}_{self.generation_count}"  # Shorter name
 
-        for _ in range(self.num_mutation_swaps):  # Try to swap a few players
-            roster_list_options = [team_to_mutate.batters, team_to_mutate.bench,
-                                   team_to_mutate.starters, team_to_mutate.relievers, team_to_mutate.closers]
+        if hasattr(parent_candidate.team, 'team_stats') and parent_candidate.team.team_stats is not None:
+            mutated_team_obj.team_stats.elo_rating = parent_candidate.team.team_stats.elo_rating
 
-            # Choose a random roster list that is not empty
-            eligible_roster_lists = [lst for lst in roster_list_options if lst]
-            if not eligible_roster_lists: continue  # No players to mutate
+        mutated_successfully_at_least_once = False
+        for _ in range(self.num_mutation_swaps):
+            roster_list_options_mut = [
+                (mutated_team_obj.batters, "batter"), (mutated_team_obj.bench, "batter"),
+                (mutated_team_obj.starters, "pitcher"), (mutated_team_obj.relievers, "pitcher"),
+                (mutated_team_obj.closers, "pitcher")
+            ]
+            eligible_roster_lists_with_type = [(lst, type_str) for lst, type_str in roster_list_options_mut if lst]
+            if not eligible_roster_lists_with_type: continue
 
-            list_to_mutate_from = random.choice(eligible_roster_lists)
+            list_to_mutate_from, player_type_str = random.choice(eligible_roster_lists_with_type)
+            if not list_to_mutate_from: continue
+
             player_to_remove_idx = random.randrange(len(list_to_mutate_from))
             player_to_remove = list_to_mutate_from.pop(player_to_remove_idx)
 
-            # Determine the role/position needed for replacement
             original_role = player_to_remove.team_role
-            original_position = player_to_remove.position  # For batters, this is their field position
+            original_position_slot = player_to_remove.position
 
-            # Try to find a replacement
             replacement_found = False
-            potential_replacements = []
-            if isinstance(player_to_remove, Batter):
-                potential_replacements = [p for p in self.batters_pool if
-                                          p.name != player_to_remove.name]  # Avoid self-replacement
-            elif isinstance(player_to_remove, Pitcher):
-                potential_replacements = [p for p in self.pitchers_pool if p.name != player_to_remove.name]
+            potential_replacements_pool = self.batters_pool if player_type_str == "batter" else self.pitchers_pool
 
+            current_team_player_ids = set()
+            for r_list_key in ["batters", "bench", "starters", "relievers", "closers"]:
+                for p_in_team in getattr(mutated_team_obj, r_list_key, []):
+                    current_team_player_ids.add((p_in_team.name, p_in_team.year, p_in_team.set))
+
+            potential_replacements = [
+                p for p in potential_replacements_pool
+                if (p.name, p.year, p.set) != (player_to_remove.name, player_to_remove.year, player_to_remove.set) and \
+                   (p.name, p.year, p.set) not in current_team_player_ids
+            ]
             random.shuffle(potential_replacements)
 
-            for new_player in potential_replacements:
-                # Check if new_player is already on the team (excluding the one just removed)
-                current_team_player_names = {p.name for p_list in roster_list_options for p in p_list}
-                if new_player.name in current_team_player_names:
-                    continue
-
-                # Check positional eligibility for the specific slot
-                # This is complex because the original player might have been placed due to general eligibility
-                # For simplicity, we'll try to match the original role/position broadly.
-                # A more robust check would involve re-validating the whole roster structure.
-
-                # For batters, original_position is their specific field slot (e.g. 'CF', '1B')
-                # For pitchers, original_role is 'SP', 'RP', 'CL'
-
+            for new_player_from_pool in potential_replacements:
+                new_player = copy.deepcopy(new_player_from_pool)
                 can_play_role = False
-                if isinstance(player_to_remove, Batter):
-                    # If it was a starter, new player must be able to play that specific position
-                    # If it was bench, any batter is fine.
+                if isinstance(new_player, Batter):
                     if original_role == "Starter":
-                        can_play_role = new_player.can_play(original_position)
-                    else:  # Bench
+                        can_play_role = new_player.can_play(original_position_slot)
+                    else:
                         can_play_role = True
-                elif isinstance(player_to_remove, Pitcher):
+                elif isinstance(new_player, Pitcher):
                     if original_role == 'SP' and new_player.position in ['Starter', 'SP', 'P']:
                         can_play_role = True
                     elif original_role == 'RP' and new_player.position in ['Reliever', 'RP', 'P']:
@@ -226,131 +260,179 @@ class GeneticTeamOptimizer:
                     elif original_role == 'CL' and new_player.position in ['Closer', 'CL', 'P']:
                         can_play_role = True
 
-                if not can_play_role:
-                    continue
+                if not can_play_role: continue
 
-                # Check point cap
-                new_team_points = sum(p.pts for p_list in roster_list_options for p in p_list) + new_player.pts
-                if self.min_points <= new_team_points <= self.max_points:
-                    list_to_mutate_from.insert(player_to_remove_idx, new_player)  # Add new player
-                    new_player.team_role = original_role  # Assign role
-                    if isinstance(new_player, Batter) and original_role == "Starter":
-                        new_player.position = original_position  # Assign specific position
-                    else:
-                        new_player.position = new_player.position  # Keep their card position if not a starter batter
+                current_points_without_removed = mutated_team_obj.total_points - player_to_remove.pts
+                new_total_points_with_new = current_points_without_removed + new_player.pts
 
-                    team_to_mutate.total_points = new_team_points  # Update team total points
-                    mutated_successfully = True
+                if self.min_points <= new_total_points_with_new <= self.max_points:
+                    list_to_mutate_from.insert(player_to_remove_idx, new_player)
+                    new_player.team_role = original_role
+                    new_player.position = original_position_slot if isinstance(new_player,
+                                                                               Batter) and original_role == "Starter" else new_player.position
+                    new_player.team_name = mutated_team_obj.name
+
+                    mutated_team_obj.total_points = new_total_points_with_new
+                    mutated_team_obj.all_pitchers = mutated_team_obj.starters + mutated_team_obj.relievers + mutated_team_obj.closers
+                    mutated_team_obj.bullpen = sorted(mutated_team_obj.relievers + mutated_team_obj.closers,
+                                                      key=lambda x: x.pts, reverse=True)
+
+                    mutated_successfully_at_least_once = True
                     replacement_found = True
-                    break  # Found a replacement
+                    break
 
-            if not replacement_found:  # Could not find a valid replacement
-                list_to_mutate_from.insert(player_to_remove_idx, player_to_remove)  # Add original back
+            if not replacement_found:
+                list_to_mutate_from.insert(player_to_remove_idx, player_to_remove)
 
-        if mutated_successfully:
-            # Reconstruct the Team object to ensure all internal lists are correct
-            # This is a bit heavy but safer after manual roster manipulation
-            final_mutated_team = Team(
-                name=team_to_mutate.name,  # Keep original name or generate new
-                batters=[p for p in team_to_mutate.batters],
-                starters=[p for p in team_to_mutate.starters],
-                relievers=[p for p in team_to_mutate.relievers],
-                closers=[p for p in team_to_mutate.closers],
-                bench=[p for p in team_to_mutate.bench]
-            )
-            final_mutated_team.team_stats = copy.deepcopy(team_to_mutate.team_stats)  # Preserve team stats object
-            return GACandidate(final_mutated_team)
-        else:
-            return candidate  # Return original if no successful mutation
+        return GACandidate(mutated_team_obj, is_newly_created=True)
+
+    def request_stop(self):
+        if self.stop_event:
+            self.stop_event.set()
+        self._log("GA stop requested by external signal.")
 
     def run(self):
         self._log("Genetic Algorithm Started.")
-        self._initialize_population()
-        self._generate_benchmark_teams()
-        if not self.benchmark_teams: return None  # Cannot proceed
+        if not self._initialize_population(): return None
+        if not self._generate_benchmark_teams(): return None
+        if not self.benchmark_teams:
+            self._log("Error: No benchmark teams generated. GA cannot run.")
+            return None
 
         self.generation_count = 0
-        for i in range(self.population_size):
+        self._log("Evaluating initial population...")
+        for i in range(len(self.population)):
+            if self.stop_event and self.stop_event.is_set(): self._log(
+                "Stop requested before initial fitness calc."); return self.best_individual_overall
             self._calculate_fitness(self.population[i])
-            progress = (i + 1) / self.population_size * 100 / (
-                        self.num_generations + 1)  # Rough progress for first eval
+            progress = ((i + 1) / len(self.population)) * (100 / (self.num_generations + 1))
             self.update_progress_callback(progress,
-                                          f"Gen 0: Evaluating initial population ({i + 1}/{self.population_size})")
+                                          f"Gen 0: Evaluating initial population ({i + 1}/{len(self.population)})")
 
-        self.population.sort(key=lambda ind: ind.fitness, reverse=True)  # Sort by fitness desc
-        self.best_individual_overall = self.population[0]
-        self._log(
-            f"Initial Best: {self.best_individual_overall.team.name}, Fitness: {self.best_individual_overall.fitness:.4f}")
+        if not self.population:
+            self._log("Error: Population is empty after initialization.")
+            return None
+
+        self.population.sort(key=lambda ind: ind.fitness, reverse=True)
+        if self.population:
+            self.best_individual_overall = copy.deepcopy(self.population[0])
+            self._log(
+                f"Initial Best: {self.best_individual_overall.team.name}, Fitness (RunDiff): {self.best_individual_overall.fitness:.0f}, Points: {self.best_individual_overall.team.total_points}")
+        else:
+            self._log("Warning: Population empty after initial evaluation. Cannot determine initial best.")
+            return None
 
         for gen in range(self.num_generations):
+            if self.stop_event and self.stop_event.is_set(): self._log(
+                f"Stop requested at start of Generation {gen + 1}."); break
             self.generation_count = gen + 1
             self._log(f"\n--- Generation {self.generation_count}/{self.num_generations} ---")
-            self.update_progress_callback(
-                (gen + 1) / (self.num_generations + 1) * 100,  # Add 1 to num_generations for initial eval step
-                f"Generation {self.generation_count}"
-            )
+
+            base_gen_progress = ((self.generation_count) / (self.num_generations + 1)) * 100
+            self.update_progress_callback(base_gen_progress, f"Generation {self.generation_count}")
 
             new_population = []
 
-            # Elitism
-            if self.elitism_count > 0:
-                elites = self.population[:self.elitism_count]
-                new_population.extend(elites)
-                # self._log(f"  Elites carried over: {[e.team.name for e in elites]}")
+            if self.elitism_count > 0 and self.elitism_count <= len(self.population):
+                for elite_cand in self.population[:self.elitism_count]:
+                    new_population.append(GACandidate(copy.deepcopy(elite_cand.team),
+                                                      is_newly_created=False))  # Elites are not "new" for stat reset
 
-            # Immigration (new random individuals)
             num_immigrants = int(self.population_size * self.immigration_rate)
+            immigrants_added = 0
             for _ in range(num_immigrants):
                 if len(new_population) >= self.population_size: break
-                team_name = f"GA_Team_Gen{self.generation_count}_Imm_{len(new_population)}"
+                if self.stop_event and self.stop_event.is_set(): break
+                team_name = f"GA_Team_Gen{self.generation_count}_Imm_{immigrants_added}"
                 team_obj = create_random_team(self.all_players, team_name, self.min_points, self.max_points)
                 if team_obj:
-                    new_population.append(GACandidate(team_obj))
-            # self._log(f"  Added {num_immigrants} new immigrant teams.")
+                    new_population.append(GACandidate(team_obj, is_newly_created=True))
+                    immigrants_added += 1
+            if self.stop_event and self.stop_event.is_set(): self._log("Stop requested during immigration."); break
 
-            # Offspring via Mutation from selected parents
             num_offspring_needed = self.population_size - len(new_population)
-            offspring_generated_count = 0
             for i in range(num_offspring_needed):
-                parent1, _ = self._select_parents_tournament()  # Only need one parent for mutation-based offspring
+                if len(new_population) >= self.population_size: break
+                if self.stop_event and self.stop_event.is_set(): break
 
-                child_candidate = parent1  # Start with parent
-                if random.random() < self.mutation_rate:
-                    child_candidate = self._mutate(parent1)
+                parents = self._select_parents_tournament()
+                if parents[0] is None:
+                    self._log(
+                        "Warning: Could not select parents, using random immigrant if possible or skipping offspring.")
+                    if immigrants_added < self.population_size - len(new_population):
+                        team_name = f"GA_Team_Gen{self.generation_count}_Fill_{i}"
+                        team_obj = create_random_team(self.all_players, team_name, self.min_points, self.max_points)
+                        if team_obj: new_population.append(GACandidate(team_obj, is_newly_created=True))
+                    continue
 
+                parent1 = parents[0]
+                child_candidate = self._mutate(parent1)  # _mutate returns a new GACandidate
                 new_population.append(child_candidate)
-                offspring_generated_count += 1
-            # self._log(f"  Generated {offspring_generated_count} offspring via mutation.")
 
-            self.population = new_population[:self.population_size]  # Ensure population size is maintained
+            if self.stop_event and self.stop_event.is_set(): self._log(
+                "Stop requested during offspring generation."); break
 
-            # Evaluate new population members (immigrants and offspring)
-            # Elites don't need re-evaluation unless benchmark changes or fitness is noisy
-            eval_start_index = self.elitism_count if self.elitism_count > 0 else 0
-            for i in range(eval_start_index, len(self.population)):
+            self.population = new_population[:self.population_size]
+
+            # Evaluate all members of the new population (elites were re-wrapped as GACandidates with fresh season stats)
+            for i in range(len(self.population)):
+                if self.stop_event and self.stop_event.is_set(): self._log(
+                    "Stop requested during new population fitness calc."); break
                 self._calculate_fitness(self.population[i])
-                # Update progress for evaluation within a generation
-                current_progress_in_gen = (i + 1 - eval_start_index) / (len(self.population) - eval_start_index)
-                total_progress = ((gen + 1) + current_progress_in_gen) / (self.num_generations + 1) * 100
-                self.update_progress_callback(total_progress,
-                                              f"Gen {self.generation_count}: Evaluating new individuals ({i + 1 - eval_start_index}/{len(self.population) - eval_start_index})")
+
+                if len(self.population) > 0:
+                    current_eval_progress_in_gen = (i + 1) / len(self.population)
+                    total_progress = base_gen_progress + (
+                            current_eval_progress_in_gen * (100 / (self.num_generations + 1)))
+                    self.update_progress_callback(total_progress,
+                                                  f"Gen {self.generation_count}: Evaluating ({i + 1}/{len(self.population)})")
+            if self.stop_event and self.stop_event.is_set(): break
+
+            if not self.population:
+                self._log(f"Warning: Population became empty during generation {self.generation_count}. Stopping.")
+                break
 
             self.population.sort(key=lambda ind: ind.fitness, reverse=True)
-            current_best_in_gen = self.population[0]
+            current_best_in_gen = self.population[0] if self.population else None
 
-            if current_best_in_gen.fitness > self.best_individual_overall.fitness:
-                self.best_individual_overall = current_best_in_gen
-                self._log(
-                    f"  NEW OVERALL BEST! Gen {self.generation_count}: {self.best_individual_overall.team.name}, Fitness: {self.best_individual_overall.fitness:.4f}")
-            else:
-                self._log(
-                    f"  Best this Gen: {current_best_in_gen.team.name}, Fitness: {current_best_in_gen.fitness:.4f} (Overall: {self.best_individual_overall.fitness:.4f})")
+            if current_best_in_gen and \
+                    (self.best_individual_overall is None or \
+                     current_best_in_gen.fitness > self.best_individual_overall.fitness):
 
-        self._log("\nGenetic Algorithm Finished.")
-        self._log(f"Overall Best Team: {self.best_individual_overall.team.name}")
-        self._log(f"  Fitness (Win %): {self.best_individual_overall.fitness:.4f}")
-        self._log(f"  Total Points: {self.best_individual_overall.team.total_points}")
-        # self._log(f"  Roster: {self.best_individual_overall.team}") # May be too verbose
+                self.best_individual_overall = copy.deepcopy(current_best_in_gen)
+                self._log(
+                    f"  NEW OVERALL BEST! Gen {self.generation_count}: {self.best_individual_overall.team.name}, Fitness (RunDiff): {self.best_individual_overall.fitness:.0f}, Points: {self.best_individual_overall.team.total_points}")
+                if self.best_individual_overall.team.batters:
+                    first_batter_stats = self.best_individual_overall.team.batters[0].season_stats
+                    first_batter_stats.update_hits()
+                    self._log(
+                        f"    DEBUG (New Best): {self.best_individual_overall.team.batters[0].name} - PA: {first_batter_stats.plate_appearances}, H: {first_batter_stats.hits}, R: {first_batter_stats.runs_scored}")
+
+            elif current_best_in_gen:
+                self._log(
+                    f"  Best this Gen: {current_best_in_gen.team.name}, Fitness (RunDiff): {current_best_in_gen.fitness:.0f} (Overall Best Fitness: {self.best_individual_overall.fitness if self.best_individual_overall else 'N/A':.0f})")
+
+        self.update_progress_callback(100, "GA Finished or Stopped.")
+        self._log("\nGenetic Algorithm Finished or Stopped.")
+        if self.best_individual_overall:
+            self._log(f"Overall Best Team Found: {self.best_individual_overall.team.name}")
+            self._log(f"  Fitness (Total Run Differential): {self.best_individual_overall.fitness:.0f}")
+            self._log(f"  Total Points: {self.best_individual_overall.team.total_points}")
+
+            # Ensure hits are updated on the final best individual's player stats before returning
+            for p_list in [self.best_individual_overall.team.batters, self.best_individual_overall.team.bench]:
+                for p in p_list:
+                    if hasattr(p, 'season_stats') and p.season_stats:
+                        p.season_stats.update_hits()
+
+            if self.best_individual_overall.team.batters:
+                b_player = self.best_individual_overall.team.batters[0]
+                if hasattr(b_player, 'season_stats') and b_player.season_stats:
+                    self._log(
+                        f"  FINAL BEST - First batter ({b_player.name}) PA: {b_player.season_stats.plate_appearances}, H: {b_player.season_stats.hits}, R: {b_player.season_stats.runs_scored}")
+                else:
+                    self._log(f"  FINAL BEST - First batter ({b_player.name}) has no season_stats or it's None.")
+        else:
+            self._log("No best individual determined (e.g., GA stopped very early or failed to initialize).")
 
         return self.best_individual_overall
-

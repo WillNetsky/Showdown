@@ -21,7 +21,7 @@ from tournament import (
     PLAYER_DATA_FILE, TEAMS_DIR
 )
 from stats import Stats, TeamStats
-from optimizer_ga import GeneticTeamOptimizer  # --- NEW: Import the GA optimizer ---
+from optimizer_ga import GeneticTeamOptimizer, GACandidate
 
 try:
     from constants import MIN_TEAM_POINTS, MAX_TEAM_POINTS
@@ -83,32 +83,55 @@ class TeamSelectionDialog(tk.Toplevel):
         self.available_teams_data = []
 
         if not os.path.exists(TEAMS_DIR) or not os.path.isdir(TEAMS_DIR):
-            self.team_listbox.insert(tk.END, "Teams directory not found.")
+            self.team_listbox.insert(tk.END, f"Teams directory '{TEAMS_DIR}' not found.")
             return
 
-        team_files = sorted(glob.glob(os.path.join(TEAMS_DIR, 'Team_*.json')))
+        # MODIFIED: Use glob to find all .json files recursively
+        # The '**' wildcard, with recursive=True, will search subdirectories.
+        search_pattern = os.path.join(TEAMS_DIR, '**', '*.json')
+        team_files = sorted(glob.glob(search_pattern, recursive=True))
+
         if not team_files:
-            self.team_listbox.insert(tk.END, "No saved teams found in 'teams/' directory.")
+            self.team_listbox.insert(tk.END,
+                                     f"No saved teams (.json files) found in '{TEAMS_DIR}' or its subdirectories.")
             return
 
         for filepath in team_files:
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+
+                # Try to get team name from JSON, fallback to filename
                 team_name = data.get("name", os.path.splitext(os.path.basename(filepath))[0])
-                elo = 1500.0
+
+                elo = 1500.0  # Default ELO
                 if "team_stats_data" in data and data["team_stats_data"] is not None:
                     elo = data["team_stats_data"].get("elo_rating", 1500.0)
 
-                display_string = f"{team_name} (ELO: {elo:.0f})"
-                self.available_teams_data.append((display_string, filepath))
-                self.team_listbox.insert(tk.END, display_string)
-            except Exception as e:
-                if hasattr(self.parent, 'log_message') and callable(self.parent.log_message):
-                    self.parent.log_message(f"Error reading team file {filepath} for dialog: {e}")
+                # Add relative path from TEAMS_DIR for better display if in subfolder
+                relative_path = os.path.relpath(filepath, TEAMS_DIR)
+                if relative_path == os.path.basename(filepath):  # If it's in the root of TEAMS_DIR
+                    display_name_with_path = team_name
                 else:
-                    print(f"Error reading team file {filepath} for dialog: {e}")
-                self.team_listbox.insert(tk.END, f"Error: {os.path.basename(filepath)}")
+                    display_name_with_path = f"{os.path.dirname(relative_path)}/{team_name}"
+
+                display_string = f"{display_name_with_path} (ELO: {elo:.0f})"
+                self.available_teams_data.append((display_string, filepath))  # Store original filepath
+                self.team_listbox.insert(tk.END, display_string)
+            except json.JSONDecodeError:
+                log_msg = f"Error decoding JSON from file: {filepath}"
+                if hasattr(self.parent, 'log_message') and callable(self.parent.log_message):
+                    self.parent.log_message(log_msg)
+                else:
+                    print(log_msg)
+                self.team_listbox.insert(tk.END, f"Error (JSON): {os.path.basename(filepath)}")
+            except Exception as e:
+                log_msg = f"Error reading team file {filepath} for dialog: {e}"
+                if hasattr(self.parent, 'log_message') and callable(self.parent.log_message):
+                    self.parent.log_message(log_msg)
+                else:
+                    print(log_msg)
+                self.team_listbox.insert(tk.END, f"Error (Read): {os.path.basename(filepath)}")
 
     def _select_all_visible(self):
         self.team_listbox.select_set(0, tk.END)
@@ -144,17 +167,16 @@ class BaseballApp:
         self.all_players_data = None
         self.app_state = "IDLE"
         self.selected_team_for_roster_var = tk.StringVar()
-        self.ga_optimizer_thread = None  # For managing GA thread
-        self.stop_ga_event = threading.Event()  # For stopping GA
+        self.ga_optimizer_thread = None
+        self.stop_ga_event = threading.Event()
 
-        # --- GA Parameter Variables ---
-        self.ga_pop_size_var = tk.IntVar(value=20)  # Smaller defaults for faster testing
+        self.ga_pop_size_var = tk.IntVar(value=20)
         self.ga_num_generations_var = tk.IntVar(value=10)
         self.ga_mutation_rate_var = tk.DoubleVar(value=0.7)
         self.ga_mutation_swaps_var = tk.IntVar(value=1)
         self.ga_elitism_count_var = tk.IntVar(value=2)
         self.ga_num_benchmark_teams_var = tk.IntVar(value=3)
-        self.ga_games_per_benchmark_var = tk.IntVar(value=6)  # Total games per candidate = this * num_benchmark_teams
+        self.ga_games_per_benchmark_var = tk.IntVar(value=4)
         self.ga_immigration_rate_var = tk.DoubleVar(value=0.1)
 
         self.main_pane = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
@@ -195,7 +217,6 @@ class BaseballApp:
         self.right_pane_notebook = ttk.Notebook(self.main_pane)
         self.main_pane.add(self.right_pane_notebook, weight=4)
 
-        # Standings Tab (No changes)
         self.standings_tab_frame = ttk.Frame(self.right_pane_notebook)
         self.right_pane_notebook.add(self.standings_tab_frame, text='Standings')
         cols_standings = ("Team", "W", "L", "Win%", "ELO", "R", "RA", "Run Diff")
@@ -207,7 +228,6 @@ class BaseballApp:
             self.standings_treeview.column(col, width=85, anchor=tk.CENTER, stretch=tk.YES)
         self.standings_treeview.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # Player Statistics (Season) Tab (No changes to structure)
         self.player_stats_tab_frame = ttk.Frame(self.right_pane_notebook)
         self.right_pane_notebook.add(self.player_stats_tab_frame, text='Player Statistics (Season)')
         player_stats_pane = ttk.PanedWindow(self.player_stats_tab_frame, orient=tk.VERTICAL)
@@ -227,6 +247,7 @@ class BaseballApp:
                                                            self.league_batting_stats_treeview, _col, False))
             self.league_batting_stats_treeview.column(col, width=w, anchor=anchor, stretch=tk.YES)
         self.league_batting_stats_treeview.pack(fill="both", expand=True, padx=5, pady=5)
+
         league_pitching_frame = ttk.LabelFrame(player_stats_pane, text="League Pitching Stats (Season)")
         player_stats_pane.add(league_pitching_frame, weight=1)
         self.cols_league_pitching = ("Name", "Year", "Set", "Team", "Role", "IP", "ERA", "WHIP", "BF", "K", "BB", "H",
@@ -243,7 +264,6 @@ class BaseballApp:
             self.league_pitching_stats_treeview.column(col, width=w, anchor=anchor, stretch=tk.YES)
         self.league_pitching_stats_treeview.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # Career Player Statistics Tab (No changes to structure)
         self.career_stats_tab_frame = ttk.Frame(self.right_pane_notebook)
         self.right_pane_notebook.add(self.career_stats_tab_frame, text='Player Statistics (Career)')
         career_stats_pane = ttk.PanedWindow(self.career_stats_tab_frame, orient=tk.VERTICAL)
@@ -261,6 +281,7 @@ class BaseballApp:
                                                            self.career_batting_stats_treeview, _col, False))
             self.career_batting_stats_treeview.column(col, width=w, anchor=anchor, stretch=tk.YES)
         self.career_batting_stats_treeview.pack(fill="both", expand=True, padx=5, pady=5)
+
         career_pitching_frame = ttk.LabelFrame(career_stats_pane, text="League Pitching Stats (Career)")
         career_stats_pane.add(career_pitching_frame, weight=1)
         self.career_pitching_stats_treeview = ttk.Treeview(career_pitching_frame, columns=self.cols_league_pitching,
@@ -275,7 +296,6 @@ class BaseballApp:
             self.career_pitching_stats_treeview.column(col, width=w, anchor=anchor, stretch=tk.YES)
         self.career_pitching_stats_treeview.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # Team Rosters & Stats Tab (No changes to structure)
         self.roster_tab_frame = ttk.Frame(self.right_pane_notebook)
         self.right_pane_notebook.add(self.roster_tab_frame, text='Team Rosters & Stats')
         roster_selector_frame = ttk.Frame(self.roster_tab_frame)
@@ -314,11 +334,9 @@ class BaseballApp:
             self.roster_pitching_treeview.column(col, width=width, anchor=anchor, stretch=tk.YES)
         self.roster_pitching_treeview.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # --- NEW: GA Optimizer Tab ---
         self.ga_optimizer_tab_frame = ttk.Frame(self.right_pane_notebook)
         self.right_pane_notebook.add(self.ga_optimizer_tab_frame, text='GA Team Optimizer')
         self._setup_ga_optimizer_tab()
-        # --- END NEW ---
 
         self.single_game_tab_frame = ttk.Frame(self.right_pane_notebook)
         self.right_pane_notebook.add(self.single_game_tab_frame, text='Play Single Game (Phase 2)')
@@ -329,25 +347,19 @@ class BaseballApp:
         self._load_all_player_data_async()
 
     def _setup_ga_optimizer_tab(self):
-        """Sets up the widgets for the GA Optimizer tab."""
-        # Frame for GA parameters
         params_frame = ttk.LabelFrame(self.ga_optimizer_tab_frame, text="GA Parameters")
         params_frame.pack(padx=10, pady=10, fill="x")
-
-        # Parameter entries using a grid
         param_labels = ["Population Size:", "Num Generations:", "Mutation Rate (0-1):",
                         "Mutation Swaps:", "Elitism Count:", "Benchmark Teams:",
                         "Games per Benchmark:", "Immigration Rate (0-1):"]
         param_vars = [self.ga_pop_size_var, self.ga_num_generations_var, self.ga_mutation_rate_var,
                       self.ga_mutation_swaps_var, self.ga_elitism_count_var, self.ga_num_benchmark_teams_var,
                       self.ga_games_per_benchmark_var, self.ga_immigration_rate_var]
-
         for i, label_text in enumerate(param_labels):
             ttk.Label(params_frame, text=label_text).grid(row=i, column=0, padx=5, pady=2, sticky="w")
             ttk.Entry(params_frame, textvariable=param_vars[i], width=10).grid(row=i, column=1, padx=5, pady=2,
                                                                                sticky="ew")
 
-        # Control buttons for GA
         ga_control_frame = ttk.Frame(self.ga_optimizer_tab_frame)
         ga_control_frame.pack(padx=10, pady=5, fill="x")
         self.start_ga_button = ttk.Button(ga_control_frame, text="Start GA Search",
@@ -357,7 +369,6 @@ class BaseballApp:
                                          state=tk.DISABLED)
         self.stop_ga_button.pack(side=tk.LEFT, padx=5)
 
-        # Progress display
         progress_frame = ttk.LabelFrame(self.ga_optimizer_tab_frame, text="GA Progress")
         progress_frame.pack(padx=10, pady=5, fill="x")
         self.ga_progress_var = tk.DoubleVar(value=0.0)
@@ -366,17 +377,12 @@ class BaseballApp:
         self.ga_status_label_var = tk.StringVar(value="Status: Idle")
         ttk.Label(progress_frame, textvariable=self.ga_status_label_var).pack(fill="x", padx=5, pady=2)
 
-        # Best team display
         best_team_frame = ttk.LabelFrame(self.ga_optimizer_tab_frame, text="Best Team Found by GA")
         best_team_frame.pack(padx=10, pady=10, fill="both", expand=True)
-
-        self.ga_best_team_info_var = tk.StringVar(value="Best Team: N/A | Fitness: N/A | Points: N/A")
+        self.ga_best_team_info_var = tk.StringVar(value="Best Team: N/A | Fitness (RunDiff): N/A | Points: N/A")
         ttk.Label(best_team_frame, textvariable=self.ga_best_team_info_var).pack(pady=5, fill="x")
-
-        # Using a PanedWindow for best team's batting and pitching stats
         best_team_stats_pane = ttk.PanedWindow(best_team_frame, orient=tk.VERTICAL)
         best_team_stats_pane.pack(fill=tk.BOTH, expand=True)
-
         ga_batting_frame = ttk.LabelFrame(best_team_stats_pane, text="Best Team - Batting Stats")
         best_team_stats_pane.add(ga_batting_frame, weight=1)
         self.ga_best_team_batting_treeview = ttk.Treeview(ga_batting_frame, columns=self.cols_roster_batting,
@@ -390,7 +396,6 @@ class BaseballApp:
                                                            self.ga_best_team_batting_treeview, _col, False))
             self.ga_best_team_batting_treeview.column(col, width=width, anchor=anchor, stretch=tk.YES)
         self.ga_best_team_batting_treeview.pack(fill="both", expand=True, padx=5, pady=5)
-
         ga_pitching_frame = ttk.LabelFrame(best_team_stats_pane, text="Best Team - Pitching Stats")
         best_team_stats_pane.add(ga_pitching_frame, weight=1)
         self.ga_best_team_pitching_treeview = ttk.Treeview(ga_pitching_frame, columns=self.cols_roster_pitching,
@@ -488,7 +493,7 @@ class BaseballApp:
             self.root.after(0, lambda: self._set_app_state("IDLE"))
 
     def log_message(self, message, internal=False):
-        if not internal or "[GA]" in message:  # Show GA messages in log
+        if not internal or "[GA]" in message:
             self.root.after(0, lambda: self._log_to_widget(message))
 
     def _log_to_widget(self, message):
@@ -502,29 +507,35 @@ class BaseballApp:
         current_state = self.app_state
         is_ga_running = self.ga_optimizer_thread is not None and self.ga_optimizer_thread.is_alive()
 
-        # Tournament Controls
         self.clear_tournament_button.config(
             state=tk.NORMAL if self.all_players_data and not is_ga_running and current_state != "LOADING_PLAYERS" else tk.DISABLED)
 
-        if current_state in ["LOADING_PLAYERS", "INITIALIZING_TOURNAMENT", "SEASON_IN_PROGRESS",
-                             "POSTSEASON_IN_PROGRESS"] or is_ga_running:
+        if is_ga_running:
             self.init_button.config(state=tk.DISABLED)
             self.run_season_button.config(state=tk.DISABLED)
             self.run_postseason_button.config(state=tk.DISABLED)
-            self.start_ga_button.config(state=tk.DISABLED)  # Disable GA start if other ops or GA running
-            self.stop_ga_button.config(state=tk.NORMAL if is_ga_running else tk.DISABLED)
+            self.start_ga_button.config(state=tk.DISABLED)
+            self.stop_ga_button.config(state=tk.NORMAL)
+        elif current_state in ["LOADING_PLAYERS", "INITIALIZING_TOURNAMENT", "SEASON_IN_PROGRESS",
+                               "POSTSEASON_IN_PROGRESS"]:
+            self.init_button.config(state=tk.DISABLED)
+            self.run_season_button.config(state=tk.DISABLED)
+            self.run_postseason_button.config(state=tk.DISABLED)
+            self.start_ga_button.config(state=tk.DISABLED)
+            self.stop_ga_button.config(state=tk.DISABLED)
+
         elif current_state == "IDLE":
             self.init_button.config(state=tk.NORMAL if self.all_players_data else tk.DISABLED)
             self.run_season_button.config(state=tk.NORMAL if self.all_teams else tk.DISABLED)
             self.run_postseason_button.config(state=tk.DISABLED)
             self.start_ga_button.config(state=tk.NORMAL if self.all_players_data else tk.DISABLED)
             self.stop_ga_button.config(state=tk.DISABLED)
+
         elif current_state == "SEASON_CONCLUDED":
             self.init_button.config(state=tk.DISABLED)
             self.run_season_button.config(state=tk.DISABLED)
             self.run_postseason_button.config(state=tk.NORMAL if self.all_teams else tk.DISABLED)
-            self.start_ga_button.config(
-                state=tk.NORMAL if self.all_players_data else tk.DISABLED)  # Can start GA after season
+            self.start_ga_button.config(state=tk.NORMAL if self.all_players_data else tk.DISABLED)
             self.stop_ga_button.config(state=tk.DISABLED)
 
     def prompt_clear_tournament_data(self):
@@ -549,12 +560,11 @@ class BaseballApp:
                          self.league_batting_stats_treeview, self.league_pitching_stats_treeview,
                          self.career_batting_stats_treeview, self.career_pitching_stats_treeview,
                          self.roster_batting_treeview, self.roster_pitching_treeview,
-                         self.ga_best_team_batting_treeview,
-                         self.ga_best_team_pitching_treeview]:  # Clear GA display too
+                         self.ga_best_team_batting_treeview, self.ga_best_team_pitching_treeview]:
             for i in treeview.get_children():
                 treeview.delete(i)
 
-        self.ga_best_team_info_var.set("Best Team: N/A | Fitness: N/A | Points: N/A")
+        self.ga_best_team_info_var.set("Best Team: N/A | Fitness (RunDiff): N/A | Points: N/A")
         self.ga_progress_var.set(0.0)
         self.ga_status_label_var.set("Status: Idle")
 
@@ -660,8 +670,8 @@ class BaseballApp:
     def _run_season_logic(self):
         try:
             if self.season_number > 1 or (self.season_number == 1 and not any(
-                    t.team_stats.games_played > 0 for t in self.all_teams if
-                    hasattr(t, 'team_stats') and t.team_stats)):
+                    hasattr(t, 'team_stats') and t.team_stats and t.team_stats.games_played > 0 for t in
+                    self.all_teams)):
                 self.log_message(f"--- Season {self.season_number}: Pre-season ---")
                 tournament_preseason(self.all_teams, log_callback=self.log_message)
                 self.log_message("Pre-season complete.")
@@ -955,10 +965,9 @@ class BaseballApp:
             return
 
         self.log_message("Starting GA Team Optimizer search...")
-        self._set_app_state("GA_RUNNING")  # New state to manage GA buttons
-        self.stop_ga_event.clear()  # Ensure stop flag is reset
+        self._set_app_state("GA_RUNNING")
+        self.stop_ga_event.clear()
 
-        # Get GA parameters from GUI
         try:
             pop_size = self.ga_pop_size_var.get()
             num_gens = self.ga_num_generations_var.get()
@@ -972,8 +981,10 @@ class BaseballApp:
             if not (0 < pop_size <= 200 and 0 < num_gens <= 1000 and \
                     0.0 <= mut_rate <= 1.0 and 0 < mut_swaps <= 5 and \
                     0 <= elitism < pop_size and 0 < bench_teams <= 10 and \
-                    0 < games_p_bench <= 20 and 0.0 <= imm_rate <= 0.5):
-                messagebox.showerror("Invalid GA Parameters", "Please check GA parameter ranges.", parent=self.root)
+                    0 < games_p_bench <= 20 and 0.0 <= imm_rate <= 0.5):  # Ensure games_p_bench > 0
+                messagebox.showerror("Invalid GA Parameters",
+                                     "Please check GA parameter ranges (e.g., games per benchmark must be > 0).",
+                                     parent=self.root)
                 self._set_app_state("IDLE")
                 return
         except tk.TclError:
@@ -991,10 +1002,11 @@ class BaseballApp:
             num_benchmark_teams=bench_teams,
             games_per_benchmark_team=games_p_bench,
             immigration_rate=imm_rate,
-            min_team_points=MIN_TEAM_POINTS,  # Use global/imported constants
+            min_team_points=MIN_TEAM_POINTS,
             max_team_points=MAX_TEAM_POINTS,
             log_callback=self.log_message,
-            update_progress_callback=self._update_ga_progress  # Pass the GUI update method
+            update_progress_callback=self._update_ga_progress,
+            stop_event=self.stop_ga_event
         )
 
         self.ga_optimizer_thread = threading.Thread(target=self._run_ga_logic, daemon=True)
@@ -1002,64 +1014,62 @@ class BaseballApp:
 
     def _run_ga_logic(self):
         try:
-            best_ga_team_candidate = self.ga_optimizer.run()  # This is a blocking call
-            if best_ga_team_candidate:
+            best_ga_team_candidate = self.ga_optimizer.run()
+            if self.stop_ga_event.is_set():
+                self.log_message("GA run was stopped by user.")
+            elif best_ga_team_candidate and best_ga_team_candidate.team:  # Check if team exists
                 self.root.after(0, lambda: self._display_best_ga_team(best_ga_team_candidate))
-                # Optionally save the best GA team
+                # Construct a filename that is more likely to be unique and informative
+                team_name_part = best_ga_team_candidate.team.name.replace(' ', '_').replace(':', '-')  # Sanitize name
                 best_team_filename = os.path.join(TEAMS_DIR,
-                                                  f"GA_Best_{best_ga_team_candidate.team.name.replace(' ', '_')}_{best_ga_team_candidate.team.total_points}.json")
+                                                  f"GA_Best_{team_name_part}_Fit{best_ga_team_candidate.fitness:.0f}_Pts{best_ga_team_candidate.team.total_points}.json")
                 save_team_to_json(best_ga_team_candidate.team, best_team_filename)
-                self.log_message(f"Best GA team saved as {best_team_filename}")
+                self.log_message(f"Best GA team saved as {os.path.basename(best_team_filename)}")
             else:
-                self.log_message("GA finished but found no best team (this shouldn't happen if GA runs).")
+                self.log_message("GA finished but found no best team or best team was invalid.")
         except Exception as e:
             self.log_message(f"Error during GA execution: {e}")
-            # import traceback
-            # self.log_message(traceback.format_exc())
             self.root.after(0, lambda: messagebox.showerror("GA Error", f"An error occurred: {e}", parent=self.root))
         finally:
-            self.root.after(0, lambda: self._set_app_state("IDLE"))  # Reset state when GA finishes or errors
+            self.ga_optimizer_thread = None
+            self.root.after(0, lambda: self._set_app_state("IDLE"))
             self.root.after(0, lambda: self.ga_status_label_var.set("Status: GA Finished / Stopped"))
 
     def stop_ga_search(self):
         if self.ga_optimizer_thread and self.ga_optimizer_thread.is_alive():
             self.log_message("Attempting to stop GA search (may take until current generation/evaluation finishes)...")
-            if hasattr(self.ga_optimizer, 'request_stop'):  # Check if optimizer supports graceful stop
-                self.ga_optimizer.request_stop()
-            self.stop_ga_event.set()  # Set a general stop event if optimizer doesn't have specific method
-            self.stop_ga_button.config(state=tk.DISABLED)  # Prevent multiple clicks
+            self.stop_ga_event.set()
+            self.stop_ga_button.config(state=tk.DISABLED)
         else:
             self.log_message("GA search is not currently running.")
 
     def _update_ga_progress(self, percentage, message):
-        """Updates the GA progress bar and status label from the GA thread."""
         self.ga_progress_var.set(percentage)
         self.ga_status_label_var.set(f"Status: {message}")
-        # self.root.update_idletasks() # May not be needed if using root.after
 
-    def _display_best_ga_team(self, best_candidate: 'GACandidate'):
-        """Displays the best team found by GA in the GA Optimizer tab."""
+    def _display_best_ga_team(self, best_candidate: GACandidate):
         if not best_candidate or not best_candidate.team:
-            self.ga_best_team_info_var.set("Best Team: N/A | Fitness: N/A | Points: N/A")
+            self.ga_best_team_info_var.set("Best Team: N/A | Fitness (RunDiff): N/A | Points: N/A")
             for i in self.ga_best_team_batting_treeview.get_children(): self.ga_best_team_batting_treeview.delete(i)
             for i in self.ga_best_team_pitching_treeview.get_children(): self.ga_best_team_pitching_treeview.delete(i)
             return
 
         team_obj = best_candidate.team
         self.ga_best_team_info_var.set(
-            f"Best Team: {team_obj.name} | Fitness: {best_candidate.fitness:.4f} | Points: {team_obj.total_points}")
+            f"Best Team: {team_obj.name} | Fitness (RunDiff): {best_candidate.fitness:.0f} | Points: {team_obj.total_points}")
+        self.log_message(f"Displaying best GA team: {team_obj.name} with fitness {best_candidate.fitness:.0f}")
 
-        # Clear previous entries
         for i in self.ga_best_team_batting_treeview.get_children(): self.ga_best_team_batting_treeview.delete(i)
         for i in self.ga_best_team_pitching_treeview.get_children(): self.ga_best_team_pitching_treeview.delete(i)
 
-        # Populate Batting Stats for the best GA team
-        # Note: GA fitness calculation uses temporary season_stats.
-        # For display, we show these temporary (fitness evaluation) season_stats.
         batters_to_display = team_obj.batters + team_obj.bench
         for player in batters_to_display:
-            player_stats = player.season_stats  # These are stats from fitness evaluation
-            if player_stats is None: player_stats = Stats()
+            player_stats = player.season_stats  # These are stats from its peak fitness evaluation
+            if player_stats is None:
+                player_stats = Stats()
+                self.log_message(
+                    f"Warning: {player.name} on best GA team ('{team_obj.name}') missing season_stats for display. Using fresh stats.")
+
             player_stats.update_hits()
             values = (
                 player.name, player.position,
@@ -1071,10 +1081,13 @@ class BaseballApp:
             )
             self.ga_best_team_batting_treeview.insert("", tk.END, values=values)
 
-        # Populate Pitching Stats for the best GA team
         for player in team_obj.all_pitchers:
-            player_stats = player.season_stats  # Stats from fitness evaluation
-            if player_stats is None: player_stats = Stats()
+            player_stats = player.season_stats
+            if player_stats is None:
+                player_stats = Stats()
+                self.log_message(
+                    f"Warning: {player.name} on best GA team ('{team_obj.name}') missing season_stats for display. Using fresh stats.")
+
             era_val = player_stats.calculate_era()
             whip_val = player_stats.calculate_whip()
             values = (
@@ -1088,7 +1101,7 @@ class BaseballApp:
                 player_stats.home_runs_allowed
             )
             self.ga_best_team_pitching_treeview.insert("", tk.END, values=values)
-        self.log_message(f"Displayed best GA team: {team_obj.name}")
+        self.log_message(f"Displayed stats for best GA team: {team_obj.name}")
 
 
 if __name__ == "__main__":
