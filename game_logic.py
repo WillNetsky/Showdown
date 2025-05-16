@@ -533,7 +533,7 @@ def play_inning(batting_team: Team, pitching_team: Team, inning_number, game_log
     game_log.extend(inning_log) #add inning log to game log
     return runs_scored_this_inning # Return the runs scored in this segment of the inning
 
-def play_game(away_team: Team, home_team: Team, num_innings=9):
+def play_game(away_team: Team, home_team: Team, num_innings=9, is_ga_evaluation=False):
     """
     Simulates a complete game between two teams.
 
