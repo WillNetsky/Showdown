@@ -68,36 +68,74 @@ class TeamSelectionDialog(tk.Toplevel):
 
     def _populate_team_list(self):
         self.team_listbox.delete(0, tk.END)
-        self.available_teams_data = []
-        if not os.path.exists(TEAMS_DIR) or not os.path.isdir(TEAMS_DIR):
-            self.team_listbox.insert(tk.END, f"Teams directory '{TEAMS_DIR}' not found.")
+        self.available_teams_data = []  # This will store (display_string, filepath) in sorted order
+
+        temporary_team_info_list = []  # To store (elo, display_name_base, filepath) for sorting
+
+        if not TEAMS_DIR or not os.path.exists(TEAMS_DIR) or not os.path.isdir(TEAMS_DIR):
+            self.team_listbox.insert(tk.END, f"Teams directory '{TEAMS_DIR or 'Not Defined'}' not found.")
             return
+
         search_pattern = os.path.join(TEAMS_DIR, '**', '*.json')
-        team_files = sorted(glob.glob(search_pattern, recursive=True))
+        team_files = glob.glob(search_pattern, recursive=True)  # Already sorted by path initially
+
         if not team_files:
-            self.team_listbox.insert(tk.END, f"No saved teams (.json files) found in '{TEAMS_DIR}' or subdirectories.")
+            self.team_listbox.insert(tk.END,
+                                     f"No saved teams (.json files) found in '{TEAMS_DIR}' or its subdirectories.")
             return
+
         for filepath in team_files:
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                team_name = data.get("name", os.path.splitext(os.path.basename(filepath))[0])
-                elo = 1500.0
+
+                team_name_from_json = data.get("name", os.path.splitext(os.path.basename(filepath))[0])
+
+                elo = 1500.0  # Default ELO
                 if "team_stats_data" in data and data["team_stats_data"] is not None:
                     elo = data["team_stats_data"].get("elo_rating", 1500.0)
+
+                # Prepare display name base (without ELO part yet)
                 relative_path = os.path.relpath(filepath, TEAMS_DIR)
-                display_name_with_path = f"({os.path.dirname(relative_path)}) {team_name}" if relative_path != os.path.basename(
-                    filepath) and os.path.dirname(relative_path) != '.' else team_name
-                display_string = f"{display_name_with_path} (ELO: {elo:.0f})"
-                self.available_teams_data.append((display_string, filepath))
-                self.team_listbox.insert(tk.END, display_string)
-            except Exception as e:
-                log_msg = f"Error processing {filepath}: {e}"
-                if hasattr(self.parent, 'log_message'):
+                display_name_base = ""
+                if relative_path != os.path.basename(filepath) and os.path.dirname(relative_path) != '.':
+                    display_name_base = f"({os.path.dirname(relative_path)}) {team_name_from_json}"
+                else:
+                    display_name_base = team_name_from_json
+
+                temporary_team_info_list.append({
+                    "elo": elo,
+                    "display_base": display_name_base,
+                    "filepath": filepath
+                })
+
+            except json.JSONDecodeError:
+                log_msg = f"Error decoding JSON from file: {filepath} in dialog."
+                if hasattr(self.parent, 'log_message') and callable(self.parent.log_message):
                     self.parent.log_message(log_msg)
                 else:
                     print(log_msg)
-                self.team_listbox.insert(tk.END, f"Error: {os.path.basename(filepath)}")
+                # Still add a placeholder to the listbox for problematic files if desired, or skip
+                # For now, let's skip adding it to the sortable list, but you could add an error entry directly to listbox
+            except Exception as e:
+                log_msg = f"Error reading team file {filepath} for dialog: {e}"
+                if hasattr(self.parent, 'log_message') and callable(self.parent.log_message):
+                    self.parent.log_message(log_msg)
+                else:
+                    print(log_msg)
+
+        # Sort the temporary list by ELO (descending, so higher ELO is first)
+        temporary_team_info_list.sort(key=lambda x: x["elo"], reverse=True)
+
+        # Now populate the listbox and self.available_teams_data in the sorted order
+        if not temporary_team_info_list and not team_files:  # If glob found files but all failed parsing
+            self.team_listbox.insert(tk.END, "No valid team files found or all failed to load.")
+
+        for team_info in temporary_team_info_list:
+            display_string = f"{team_info['display_base']} (ELO: {team_info['elo']:.0f})"
+            self.available_teams_data.append(
+                (display_string, team_info['filepath']))  # For mapping selection back to filepath
+            self.team_listbox.insert(tk.END, display_string)
 
     def _select_all_visible(self):
         self.team_listbox.select_set(0, tk.END)

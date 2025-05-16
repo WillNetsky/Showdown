@@ -419,10 +419,14 @@ class BaseballApp:
             self.root.after(0, lambda: self._set_app_state("SEASON_CONCLUDED"))
 
     # --- GA Optimizer Process Management Methods ---
-    def start_ga_optimizer_process(self, ga_params_from_tab, selected_benchmark_files):
+    def start_ga_optimizer_process(self, ga_params_from_tab, selected_benchmark_files_from_tab):
         self.log_message("GA process initiated by controller...")
         self._set_app_state("GA_RUNNING")
         self.stop_ga_event.clear()
+
+        benchmark_files_to_use_in_optimizer = list(selected_benchmark_files_from_tab)
+        self.log_message(f"[Controller] Copied benchmark files for optimizer: {benchmark_files_to_use_in_optimizer}")
+
         if hasattr(self, 'ga_optimizer_tab'): self.ga_optimizer_tab.reset_ui()
 
         self.ga_optimizer = GeneticTeamOptimizer(
@@ -435,8 +439,9 @@ class BaseballApp:
             num_benchmark_teams=ga_params_from_tab["num_benchmark_teams"],
             games_vs_each_benchmark=ga_params_from_tab["games_vs_each_benchmark"],
             immigration_rate=ga_params_from_tab["immigration_rate"],
-            benchmark_archetype_files=selected_benchmark_files,
-            min_team_points=MIN_TEAM_POINTS, max_team_points=MAX_TEAM_POINTS,
+            benchmark_archetype_files=benchmark_files_to_use_in_optimizer,  # <--- Parameter being passed
+            min_team_points=MIN_TEAM_POINTS,
+            max_team_points=MAX_TEAM_POINTS,
             log_callback=self.log_message,
             update_progress_callback=self._forward_ga_progress_to_tab,
             stop_event=self.stop_ga_event
