@@ -92,7 +92,6 @@ class GAOptimizerTab(ttk.Frame):
                 pass  # In case var is being destroyed
 
     def _setup_widgets(self):
-        # Frame for parameters & benchmark selection (top part)
         params_and_benchmark_select_outer_frame = ttk.Frame(self)
         params_and_benchmark_select_outer_frame.pack(padx=10, pady=10, fill="x", anchor="n")
 
@@ -113,25 +112,35 @@ class GAOptimizerTab(ttk.Frame):
                                                            textvariable=self.selected_benchmarks_label_var)
         self.selected_benchmarks_display_label.grid(row=0, column=1, padx=5, pady=5, sticky="w")
 
-        ttk.Label(benchmark_select_frame, text=("If fewer custom benchmarks are selected than 'Num Benchmark Teams',\n"
-                                                "remaining slots will be filled by new random teams."), wraplength=350,
-                  justify=tk.LEFT).grid(row=1, column=0, columnspan=2, padx=5, pady=(0, 5), sticky="w")
+        ttk.Label(benchmark_select_frame, text=(
+            "If fewer custom benchmarks are selected than 'Num Benchmark Teams',\n"
+            "remaining slots will be filled by new random teams."),
+                  wraplength=350, justify=tk.LEFT).grid(row=1, column=0, columnspan=2, padx=5, pady=(0, 5), sticky="w")
 
-        param_labels = ["Population Size:", "Num Generations:", "Mutation Rate (0-1):",
-                        "Mutation Swaps:", "Elitism Count:", "Num Benchmark Teams (Total):",
-                        "Games vs Each Benchmark:", "Immigration Rate (0-1):"]
-        # Use self.app_controller.ga_num_benchmark_teams_var for the actual value input
+        # Updated parameter labels with ranges
+        param_labels_with_ranges = [
+            ("Population Size:", "(1-500)"),
+            ("Num Generations:", "(1-2000)"),
+            ("Mutation Rate:", "(0.0-1.0)"),  # Already had a range-like indicator
+            ("Mutation Swaps:", "(1-10)"),
+            ("Elitism Count:", "(0 to PopSize-1)"),
+            ("Num Benchmark Teams (Total):", "(0-20)"),
+            ("Games vs Each Benchmark:", "(1-1000)"),
+            ("Immigration Rate:", "(0.0-0.5)")  # Corrected range
+        ]
+
+        # Corresponding Tkinter variables (num_benchmark_teams_var is from app_controller)
         param_vars = [self.pop_size_var, self.num_generations_var, self.mutation_rate_var,
-                      self.mutation_swaps_var, self.elitism_count_var, self.app_controller.ga_num_benchmark_teams_var,
-                      # Use main app's var
+                      self.mutation_swaps_var, self.elitism_count_var,
+                      self.app_controller.ga_num_benchmark_teams_var,  # This one is special
                       self.games_vs_each_benchmark_var, self.immigration_rate_var]
 
-        for i, label_text in enumerate(param_labels):
-            ttk.Label(params_frame, text=label_text).grid(row=i, column=0, padx=5, pady=3, sticky="w")
-            ttk.Entry(params_frame, textvariable=param_vars[i], width=10).grid(row=i, column=1, padx=5, pady=3,
-                                                                               sticky="ew")
+        for i, ((label_text, range_text), var) in enumerate(zip(param_labels_with_ranges, param_vars)):
+            full_label_text = f"{label_text} {range_text}"
+            ttk.Label(params_frame, text=full_label_text).grid(row=i, column=0, padx=5, pady=3, sticky="w")
+            ttk.Entry(params_frame, textvariable=var, width=10).grid(row=i, column=1, padx=5, pady=3, sticky="ew")
 
-        # Control buttons (Start/Stop GA)
+        # GA Controls (Start/Stop)
         ga_control_frame = ttk.Frame(self)
         ga_control_frame.pack(padx=10, pady=5, fill="x", anchor="n")
         self.start_ga_button = ttk.Button(ga_control_frame, text="Start GA Search",
@@ -141,7 +150,7 @@ class GAOptimizerTab(ttk.Frame):
                                          state=tk.DISABLED)
         self.stop_ga_button.pack(side=tk.LEFT, padx=5)
 
-        # Progress bar and status
+        # Progress Bar and Status Label
         progress_frame = ttk.LabelFrame(self, text="GA Progress")
         progress_frame.pack(padx=10, pady=5, fill="x", anchor="n")
         self.progress_var = tk.DoubleVar(value=0.0)
@@ -150,9 +159,9 @@ class GAOptimizerTab(ttk.Frame):
         self.status_label_var = tk.StringVar(value="Status: Idle")
         ttk.Label(progress_frame, textvariable=self.status_label_var).pack(fill="x", padx=5, pady=2)
 
-        # Best team display area (Plot on left, Details on right)
+        # Plot and Best Team Details (as before)
         best_team_frame_outer = ttk.Frame(self)
-        best_team_frame_outer.pack(padx=10, pady=10, fill="both", expand=True)  # This should expand
+        best_team_frame_outer.pack(padx=10, pady=10, fill="both", expand=True)
 
         plot_frame = ttk.LabelFrame(best_team_frame_outer, text="GA Fitness Over Generations")
         plot_frame.pack(side=tk.LEFT, fill="both", expand=True, padx=(0, 5))
@@ -166,9 +175,12 @@ class GAOptimizerTab(ttk.Frame):
             self.toolbar.update()
             self.toolbar.pack(side=tk.BOTTOM, fill=tk.X)
         except Exception as e:
-            self.app_controller.log_message(f"Matplotlib toolbar error: {e}", internal=True)
+            if hasattr(self.app_controller, 'log_message'):
+                self.app_controller.log_message(f"Matplotlib toolbar error: {e}", internal=True)
+            else:
+                print(f"Matplotlib toolbar error: {e}")
         self.plot_initialized = True
-        self.draw_fitness_plot()  # Initial empty plot
+        self.draw_fitness_plot()
 
         best_team_details_frame = ttk.LabelFrame(best_team_frame_outer, text="Best Team Found by GA")
         best_team_details_frame.pack(side=tk.RIGHT, fill="both", expand=True, padx=(5, 0))
