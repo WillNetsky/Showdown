@@ -1,6 +1,17 @@
 # stats.py
 # Stat tracking for players and teams
 
+# Linear weights for batting runs, could move to constants.py
+BATTING_RUNS_WEIGHTS = {
+    "BB": 0.292,    # Unintentional Walk
+    #"HBP": 0.323,   # Hit By Pitch (add if you track it)
+    "1B": 0.456,    # Single
+    "2B": 0.763,    # Double
+    "3B": 1.064,    # Triple
+    "HR": 1.380,    # Home Run
+    "OUT": -0.265   # Value of making an Out (all types of outs made by batter)
+}
+
 class Stats:
     def __init__(self):
         # Batting stats to track
@@ -75,6 +86,27 @@ class Stats:
         ops_val = obp_val + slg_val
         ops_str = "{:.3f}".format(ops_val)
         return ops_str[1:] if ops_val < 1.0 and ops_str.startswith("0.") else ops_str
+
+    def calculate_batting_runs(self):
+        """
+        Calculates Batting Runs based on linear weights.
+        This version uses weights where positive events add value and outs subtract value.
+        """
+        batting_runs_value = 0.0
+
+        batting_runs_value += self.walks * BATTING_RUNS_WEIGHTS["BB"]
+        # if hasattr(self, 'hbp'): # Check if HBP is tracked
+        #     batting_runs_value += self.hbp * BATTING_RUNS_WEIGHTS["HBP"]
+        batting_runs_value += self.singles * BATTING_RUNS_WEIGHTS["1B"]
+        batting_runs_value += self.doubles * BATTING_RUNS_WEIGHTS["2B"]
+        batting_runs_value += self.triples * BATTING_RUNS_WEIGHTS["3B"]
+        batting_runs_value += self.home_runs * BATTING_RUNS_WEIGHTS["HR"]
+
+        # Add the negative value for all outs made by the batter
+        # self.outs should accurately count each time this batter made an out.
+        batting_runs_value += self.outs * BATTING_RUNS_WEIGHTS["OUT"]
+
+        return batting_runs_value
 
     def calculate_era(self):
         if self.outs_recorded == 0:
