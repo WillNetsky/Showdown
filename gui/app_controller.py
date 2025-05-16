@@ -3,24 +3,21 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, filedialog, messagebox
 import threading
 import os
-import glob
 import time
-import json
 import re
 
 # Imports for backend logic
 from team_management import (load_players_from_json, create_random_team,
                              save_team_to_json, load_team_from_json, get_next_team_number)
-from game_logic import play_game
-from entities import Team, Batter, Pitcher  # Kept for type hints and potential direct use
+
 from tournament import (
     preseason as tournament_preseason,
     play_season as tournament_play_season,
     postseason as tournament_postseason_culling,
     PLAYER_DATA_FILE, TEAMS_DIR
 )
-from stats import Stats, TeamStats  # Stats may be needed for fallback or type hints
-from optimizer_ga import GeneticTeamOptimizer, GACandidate  # For running GA
+
+from optimizer_ga import GeneticTeamOptimizer
 
 # Import the GUI components from the 'gui' package
 from .dialogs import TeamSelectionDialog
