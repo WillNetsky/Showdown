@@ -3,23 +3,17 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, filedialog, messagebox
 import threading
 import os
-import glob
-import time
-import json
 import re
 
 # Imports for backend logic
 from team_management import (load_players_from_json, create_random_team,
                              save_team_to_json, load_team_from_json, get_next_team_number)
-from game_logic import play_game
-from entities import Team, Batter, Pitcher
 from tournament import (
     preseason as tournament_preseason,
     play_season as tournament_play_season,
     postseason as tournament_postseason_culling,
     PLAYER_DATA_FILE, TEAMS_DIR
 )
-from stats import Stats, TeamStats
 from optimizer_ga import GeneticTeamOptimizer, GACandidate
 
 # Import the GUI components from the 'gui' package
@@ -28,7 +22,7 @@ from .ga_optimizer_tab import GAOptimizerTab
 from .player_league_stats_tab import PlayerLeagueStatsTab
 from .standings_tab import StandingsTab
 from .team_roster_tab import TeamRosterTab
-from .control_pane import ControlPane  # Assuming ControlPane was also refactored
+from .control_pane import ControlPane
 
 try:
     import sys
@@ -501,6 +495,3 @@ class BaseballApp:
             self.stop_ga_event.set()
         else:
             self.log_message("GA search not currently running (controller).")
-
-# Note: No if __name__ == "__main__": block here, as this file is a module.
-# main.py is now the entry point.
