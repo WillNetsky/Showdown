@@ -3,17 +3,24 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, filedialog, messagebox
 import threading
 import os
+import glob
+import time
+import json
 import re
 
 # Imports for backend logic
 from team_management import (load_players_from_json, create_random_team,
                              save_team_to_json, load_team_from_json, get_next_team_number)
+from game_logic import play_game
+from entities import Team, Batter, Pitcher
 from tournament import (
     preseason as tournament_preseason,
     play_season as tournament_play_season,
     postseason as tournament_postseason_culling,
     PLAYER_DATA_FILE, TEAMS_DIR
 )
+# Assuming Stats class has all new methods, and constants are defined there or imported by it
+from stats import Stats, TeamStats, DEFAULT_LEAGUE_AVG_ERA_PLACEHOLDER
 from optimizer_ga import GeneticTeamOptimizer, GACandidate
 
 # Import the GUI components from the 'gui' package
@@ -22,13 +29,12 @@ from .ga_optimizer_tab import GAOptimizerTab
 from .player_league_stats_tab import PlayerLeagueStatsTab
 from .standings_tab import StandingsTab
 from .team_roster_tab import TeamRosterTab
-from .control_pane import ControlPane
+from .control_pane import ControlPane  # For the left pane
 
 try:
     import sys
 
-    # Ensure parent directory is in path if running app_controller directly
-    # This might not be needed if main.py handles path setup or project is structured as a package
+    # Ensure project root is in path for constants if it's defined there
     if os.path.join(os.path.dirname(__file__), '..') not in sys.path:
         sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     from constants import MIN_TEAM_POINTS, MAX_TEAM_POINTS
@@ -41,7 +47,7 @@ class BaseballApp:
     def __init__(self, root_window):
         self.root = root_window
         self.root.title("Baseball Simulator GUI")
-        self.root.geometry("1400x900")
+        self.root.geometry("1400x900")  # Adjusted for potentially more columns
 
         # Core application data
         self.all_teams = []
@@ -49,30 +55,29 @@ class BaseballApp:
         self.all_players_data = None
         self.app_state = "IDLE"
 
-        # Tkinter variables that might be shared or controlled at app level
-        self.num_teams_var = tk.IntVar(value=20)  # Used by ControlPane and tournament logic
+        # Tkinter variables controlled at the app level
+        self.num_teams_var = tk.IntVar(value=20)  # Used by ControlPane & tournament logic
+        self.ga_num_benchmark_teams_var = tk.IntVar(value=5)  # Used by GAOptimizerTab & GA logic
 
-        # GA related state managed by BaseballApp (controller part)
+        # GA related state managed by BaseballApp
         self.ga_optimizer_thread = None
         self.stop_ga_event = threading.Event()
-        self.ga_num_benchmark_teams_var = tk.IntVar(value=5)  # Used by GAOptimizerTab
 
         # --- Main Layout ---
         self.main_pane = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         self.main_pane.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Left Pane (will be populated by ControlPane)
         self.left_pane_frame = ttk.Frame(self.main_pane, width=350)
-        self.main_pane.add(self.left_pane_frame, weight=0)
+        self.main_pane.add(self.left_pane_frame, weight=0)  # Fixed width for left pane
 
-        # --- Instantiate ControlPane (Manages Left Pane UI) ---
+        # --- Instantiate ControlPane (Manages Left Pane UI: Controls & Log) ---
         self.control_pane = ControlPane(self.left_pane_frame, self)
 
         # --- Right Pane: Notebook for Tabs ---
         self.right_pane_notebook = ttk.Notebook(self.main_pane)
-        self.main_pane.add(self.right_pane_notebook, weight=1)
+        self.main_pane.add(self.right_pane_notebook, weight=1)  # Expandable right pane
 
-        # --- Instantiate and Add Tabs ---
+        # --- Instantiate and Add Tabs from their respective modules ---
         self.standings_tab = StandingsTab(self.right_pane_notebook, self)
         self.right_pane_notebook.add(self.standings_tab, text='Standings')
 
@@ -96,7 +101,7 @@ class BaseballApp:
         self.right_pane_notebook.add(self.single_game_tab_frame, text='Play Single Game')
         ttk.Label(self.single_game_tab_frame, text="Detailed single game playout (Future).").pack(padx=20, pady=20)
 
-        # Initial state
+        # Initial application state
         self._set_app_state("LOADING_PLAYERS")
         self._load_all_player_data_async()
         self.update_button_states()
@@ -106,42 +111,34 @@ class BaseballApp:
         self.update_button_states()
 
     def _treeview_sort_column(self, tv, col, reverse):
-        # This general utility remains in the app controller
-        # It needs to correctly identify the treeview being sorted to apply numeric rules
+        # General treeview sorting utility, called by various tabs
         try:
             data_list = []
             for k in tv.get_children(''):
                 value = tv.set(k, col)
                 try:
                     numeric_cols = []
-                    # Determine numeric columns based on the treeview instance
-                    # This logic checks against treeview instances now owned by tab objects
+                    # Identify treeview and set its numeric columns
                     if hasattr(self, 'standings_tab') and tv == self.standings_tab.standings_treeview:
                         numeric_cols = ["W", "L", "Win%", "ELO", "R", "RA", "Run Diff"]
-                    elif hasattr(self,
-                                 'player_stats_season_tab') and tv == self.player_stats_season_tab.batting_treeview:
+                    elif (hasattr(self,
+                                  'player_stats_season_tab') and tv == self.player_stats_season_tab.batting_treeview) or \
+                            (hasattr(self,
+                                     'player_stats_career_tab') and tv == self.player_stats_career_tab.batting_treeview) or \
+                            (hasattr(self, 'team_roster_tab') and tv == self.team_roster_tab.batting_treeview) or \
+                            (hasattr(self,
+                                     'ga_optimizer_tab') and tv == self.ga_optimizer_tab.best_team_batting_treeview):
                         numeric_cols = ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO", "AVG", "OBP", "SLG",
                                         "OPS", "BatRuns", "Year"]
-                    elif hasattr(self,
-                                 'player_stats_career_tab') and tv == self.player_stats_career_tab.batting_treeview:
-                        numeric_cols = ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO", "AVG", "OBP", "SLG",
-                                        "OPS", "BatRuns", "Year"]
-                    elif hasattr(self, 'team_roster_tab') and tv == self.team_roster_tab.batting_treeview:
-                        numeric_cols = ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO", "AVG", "OBP", "SLG",
-                                        "OPS", "BatRuns", "Year"]
-                    elif hasattr(self, 'ga_optimizer_tab') and tv == self.ga_optimizer_tab.best_team_batting_treeview:
-                        numeric_cols = ["PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO", "AVG", "OBP", "SLG",
-                                        "OPS", "BatRuns", "Year"]
-                    elif hasattr(self,
-                                 'player_stats_season_tab') and tv == self.player_stats_season_tab.pitching_treeview:
-                        numeric_cols = ["IP", "ERA", "WHIP", "BF", "K", "BB", "H", "R", "ER", "HR", "Year"]
-                    elif hasattr(self,
-                                 'player_stats_career_tab') and tv == self.player_stats_career_tab.pitching_treeview:
-                        numeric_cols = ["IP", "ERA", "WHIP", "BF", "K", "BB", "H", "R", "ER", "HR", "Year"]
-                    elif hasattr(self, 'team_roster_tab') and tv == self.team_roster_tab.pitching_treeview:
-                        numeric_cols = ["IP", "ERA", "WHIP", "BF", "K", "BB", "H", "R", "ER", "HR", "Year"]
-                    elif hasattr(self, 'ga_optimizer_tab') and tv == self.ga_optimizer_tab.best_team_pitching_treeview:
-                        numeric_cols = ["IP", "ERA", "WHIP", "BF", "K", "BB", "H", "R", "ER", "HR", "Year"]
+                    elif (hasattr(self,
+                                  'player_stats_season_tab') and tv == self.player_stats_season_tab.pitching_treeview) or \
+                            (hasattr(self,
+                                     'player_stats_career_tab') and tv == self.player_stats_career_tab.pitching_treeview) or \
+                            (hasattr(self, 'team_roster_tab') and tv == self.team_roster_tab.pitching_treeview) or \
+                            (hasattr(self,
+                                     'ga_optimizer_tab') and tv == self.ga_optimizer_tab.best_team_pitching_treeview):
+                        numeric_cols = ["IP", "ERA", "WHIP", "FIP", "K/9", "BB/9", "HR/9", "RSAA", "FIP-RS",
+                                        "BF", "K", "BB", "H", "R", "ER", "HR", "Year"]
 
                     is_numeric_col = col in numeric_cols
                     if is_numeric_col:
@@ -158,7 +155,7 @@ class BaseballApp:
                         elif cleaned_value.lower() == "-inf":
                             numeric_value = float('-inf')
                         elif cleaned_value.lower() == "nan":
-                            numeric_value = float('inf') if col == "ERA" else -1.0
+                            numeric_value = float('inf') if col in ["ERA", "FIP"] else -1.0
                         elif col == "Year":
                             numeric_value = int(cleaned_value) if cleaned_value.isdigit() else 0
                         else:
@@ -169,7 +166,7 @@ class BaseballApp:
                 except ValueError:
                     data_list.append((str(value).lower(), k))
 
-            if col == "ERA":
+            if col in ["ERA", "FIP"]:
                 data_list.sort(key=lambda t: t[0], reverse=not reverse)
             else:
                 data_list.sort(key=lambda t: t[0], reverse=reverse)
@@ -194,6 +191,7 @@ class BaseballApp:
             else:
                 self.log_message(f"ERROR: No player data loaded from {PLAYER_DATA_FILE}.")
                 messagebox.showerror("Player Data Error", f"Could not load player data from {PLAYER_DATA_FILE}.")
+            # Always set to IDLE, successful or not, so user can try other actions or quit.
             self.root.after(0, lambda: self._set_app_state("IDLE"))
         except Exception as e:
             self.log_message(f"Exception during player data load: {e}")
@@ -201,12 +199,11 @@ class BaseballApp:
             self.root.after(0, lambda: self._set_app_state("IDLE"))
 
     def log_message(self, message, internal=False):
-        """Main application logging method. Forwards to ControlPane's log widget."""
         if not internal or "[GA]" in message or "ERROR" in message or "Warning" in message:
             if hasattr(self, 'control_pane') and self.control_pane:
                 self.root.after(0, lambda: self.control_pane.log_to_widget(message))
-            else:
-                print(f"LOG (app_controller fallback): {message}")
+            else:  # Fallback if control_pane isn't fully initialized during an early log
+                print(f"LOG (app_controller pre-control_pane): {message}")
 
     def update_button_states(self):
         current_state = self.app_state
@@ -249,6 +246,7 @@ class BaseballApp:
         self.all_teams = [];
         self.season_number = 0
 
+        # Tell each refactored tab to clear its display
         if hasattr(self, 'standings_tab'): self.standings_tab.clear_display()
         if hasattr(self, 'player_stats_season_tab'): self.player_stats_season_tab.clear_display()
         if hasattr(self, 'player_stats_career_tab'): self.player_stats_career_tab.clear_display()
@@ -258,11 +256,43 @@ class BaseballApp:
         if hasattr(self, 'control_pane') and hasattr(self.control_pane, 'log_text_widget'):
             self.control_pane.log_text_widget.config(state=tk.NORMAL)
             self.control_pane.log_text_widget.delete('1.0', tk.END)
-            # self.control_pane.log_text_widget.config(state=tk.DISABLED) # Log_message will disable it
 
-        self.log_message("Data cleared. Ready for new run.")
-        if hasattr(self, 'team_roster_tab'): self.team_roster_tab.update_team_selector()
+        self.log_message("Data cleared. Ready for new run.")  # This will use the now-cleared log
+        if hasattr(self, 'team_roster_tab'): self.team_roster_tab.update_team_selector()  # Update combobox
         self._set_app_state("IDLE")
+
+    def get_current_league_average_era(self):
+        """Calculates the current league average ERA from all teams' season stats."""
+        total_er = 0
+        total_outs = 0
+        if not self.all_teams:
+            return DEFAULT_LEAGUE_AVG_ERA_PLACEHOLDER
+
+        unique_pitchers_stats = {}
+        for team in self.all_teams:
+            for player in team.all_pitchers:
+                player_key = (player.name, player.year, player.set)
+                if hasattr(player, 'season_stats') and player.season_stats:
+                    # Aggregate stats if a player appears on multiple teams (unlikely in current setup but robust)
+                    if player_key not in unique_pitchers_stats:
+                        unique_pitchers_stats[player_key] = Stats()  # Create a temporary Stats obj for aggregation
+                    unique_pitchers_stats[player_key].add_stats(player.season_stats)
+
+        if not unique_pitchers_stats:
+            return DEFAULT_LEAGUE_AVG_ERA_PLACEHOLDER
+
+        for p_stats in unique_pitchers_stats.values():
+            total_er += p_stats.earned_runs_allowed
+            total_outs += p_stats.outs_recorded
+
+        if total_outs == 0:
+            return DEFAULT_LEAGUE_AVG_ERA_PLACEHOLDER
+
+        league_ip = total_outs / 3.0
+        if league_ip == 0:
+            return DEFAULT_LEAGUE_AVG_ERA_PLACEHOLDER
+
+        return (total_er * 9) / league_ip
 
     # --- Tournament Flow Methods ---
     def initialize_tournament_threaded(self):
@@ -288,7 +318,9 @@ class BaseballApp:
                 if fp in loaded_paths: continue
                 team = load_team_from_json(fp)
                 if team:
-                    team.json_filepath = fp; temp_teams.append(team); loaded_paths.add(fp)
+                    team.json_filepath = fp  # Store original path for later saving
+                    temp_teams.append(team);
+                    loaded_paths.add(fp)
                 else:
                     self.log_message(f"Warn: Failed to load team from {fp}")
             self.log_message(f"Loaded {len(temp_teams)} user-selected teams for tournament.")
@@ -298,7 +330,7 @@ class BaseballApp:
                 if not self.all_players_data: self.log_message(
                     "ERROR: Player data missing for generation!"); self.root.after(0, lambda: self._set_app_state(
                     "IDLE")); return
-                for _ in range(to_generate):
+                for i in range(to_generate):  # Corrected loop variable
                     num = get_next_team_number(TEAMS_DIR);
                     name = f"RandTourneyTm {num}"
                     new_team = create_random_team(self.all_players_data, name, MIN_TEAM_POINTS, MAX_TEAM_POINTS)
@@ -321,10 +353,15 @@ class BaseballApp:
             self.log_message(
                 f"Tournament initialized: {len(self.all_teams)} teams. Ready for Season {self.season_number}.")
 
+            current_lg_era = self.get_current_league_average_era()
             if hasattr(self, 'standings_tab'): self.root.after(0, lambda: self.standings_tab.update_display(
                 self.all_teams))
-            if hasattr(self, 'player_stats_season_tab'): self.root.after(0, self.player_stats_season_tab.update_display)
-            if hasattr(self, 'player_stats_career_tab'): self.root.after(0, self.player_stats_career_tab.update_display)
+            if hasattr(self, 'player_stats_season_tab'): self.root.after(0,
+                                                                         lambda: self.player_stats_season_tab.update_display(
+                                                                             league_avg_era_for_rsaa=current_lg_era))
+            if hasattr(self, 'player_stats_career_tab'): self.root.after(0,
+                                                                         lambda: self.player_stats_career_tab.update_display(
+                                                                             league_avg_era_for_rsaa=current_lg_era))
             if hasattr(self, 'team_roster_tab'): self.root.after(0, self.team_roster_tab.update_team_selector)
             self.root.after(0, lambda: self._set_app_state("IDLE"))
         except Exception as e:
@@ -350,19 +387,24 @@ class BaseballApp:
             for team in self.all_teams:
                 f_path = team.json_filepath if hasattr(team, 'json_filepath') and team.json_filepath and os.path.exists(
                     os.path.dirname(team.json_filepath)) else None
-                if not f_path:
-                    num_match = re.search(r'Team[_ ](\d+)', team.name)
+                if not f_path:  # Generate a new filename if path is not stored or dir became invalid
+                    num_match = re.search(r'Team[_ ](\d+)', team.name)  # Try to find existing number
                     next_num = get_next_team_number(TEAMS_DIR) if not num_match else num_match.group(1)
                     s_name = re.sub(r'[^\w.-]', '_', team.name if team.name else f"Team{next_num}")
                     f_path = os.path.join(TEAMS_DIR, f"Team_{next_num}_{s_name}_{team.total_points}.json")
                 save_team_to_json(team, f_path);
-                team.json_filepath = f_path
+                team.json_filepath = f_path  # Update/store path
             self.log_message("All team data saved after season.")
 
+            current_lg_era = self.get_current_league_average_era()
             if hasattr(self, 'standings_tab'): self.root.after(0, lambda: self.standings_tab.update_display(
                 self.all_teams))
-            if hasattr(self, 'player_stats_season_tab'): self.root.after(0, self.player_stats_season_tab.update_display)
-            if hasattr(self, 'player_stats_career_tab'): self.root.after(0, self.player_stats_career_tab.update_display)
+            if hasattr(self, 'player_stats_season_tab'): self.root.after(0,
+                                                                         lambda: self.player_stats_season_tab.update_display(
+                                                                             league_avg_era_for_rsaa=current_lg_era))
+            if hasattr(self, 'player_stats_career_tab'): self.root.after(0,
+                                                                         lambda: self.player_stats_career_tab.update_display(
+                                                                             league_avg_era_for_rsaa=current_lg_era))
             if hasattr(self, 'team_roster_tab'): self.root.after(0, self.team_roster_tab.update_team_selector)
             self.root.after(0, lambda: self._set_app_state("SEASON_CONCLUDED"))
         except Exception as e:
@@ -407,10 +449,15 @@ class BaseballApp:
             self.log_message(
                 f"Postseason complete. Ready for Season {self.season_number} with {len(self.all_teams)} teams.")
 
+            current_lg_era = self.get_current_league_average_era()
             if hasattr(self, 'standings_tab'): self.root.after(0, lambda: self.standings_tab.update_display(
                 self.all_teams))
-            if hasattr(self, 'player_stats_season_tab'): self.root.after(0, self.player_stats_season_tab.update_display)
-            if hasattr(self, 'player_stats_career_tab'): self.root.after(0, self.player_stats_career_tab.update_display)
+            if hasattr(self, 'player_stats_season_tab'): self.root.after(0,
+                                                                         lambda: self.player_stats_season_tab.update_display(
+                                                                             league_avg_era_for_rsaa=current_lg_era))
+            if hasattr(self, 'player_stats_career_tab'): self.root.after(0,
+                                                                         lambda: self.player_stats_career_tab.update_display(
+                                                                             league_avg_era_for_rsaa=current_lg_era))
             if hasattr(self, 'team_roster_tab'): self.root.after(0, self.team_roster_tab.update_team_selector)
             self.root.after(0, lambda: self._set_app_state("IDLE"))
         except Exception as e:
@@ -419,15 +466,16 @@ class BaseballApp:
             self.root.after(0, lambda: self._set_app_state("SEASON_CONCLUDED"))
 
     # --- GA Optimizer Process Management Methods ---
-    def start_ga_optimizer_process(self, ga_params_from_tab, selected_benchmark_files_from_tab):
+    def start_ga_optimizer_process(self, ga_params_from_tab, selected_benchmark_files):
         self.log_message("GA process initiated by controller...")
         self._set_app_state("GA_RUNNING")
         self.stop_ga_event.clear()
 
-        benchmark_files_to_use_in_optimizer = list(selected_benchmark_files_from_tab)
+        benchmark_files_to_use_in_optimizer = list(selected_benchmark_files)
         self.log_message(f"[Controller] Copied benchmark files for optimizer: {benchmark_files_to_use_in_optimizer}")
 
-        if hasattr(self, 'ga_optimizer_tab'): self.ga_optimizer_tab.reset_ui()
+        if hasattr(self, 'ga_optimizer_tab'):
+            self.ga_optimizer_tab.reset_ui()
 
         self.ga_optimizer = GeneticTeamOptimizer(
             all_players_list=self.all_players_data,
@@ -439,9 +487,8 @@ class BaseballApp:
             num_benchmark_teams=ga_params_from_tab["num_benchmark_teams"],
             games_vs_each_benchmark=ga_params_from_tab["games_vs_each_benchmark"],
             immigration_rate=ga_params_from_tab["immigration_rate"],
-            benchmark_archetype_files=benchmark_files_to_use_in_optimizer,  # <--- Parameter being passed
-            min_team_points=MIN_TEAM_POINTS,
-            max_team_points=MAX_TEAM_POINTS,
+            benchmark_archetype_files=benchmark_files_to_use_in_optimizer,
+            min_team_points=MIN_TEAM_POINTS, max_team_points=MAX_TEAM_POINTS,
             log_callback=self.log_message,
             update_progress_callback=self._forward_ga_progress_to_tab,
             stop_event=self.stop_ga_event

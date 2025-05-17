@@ -1,50 +1,93 @@
 # gui/ga_optimizer_tab.py
 import tkinter as tk
-from tkinter import ttk, messagebox
-import os  # For path joining if saving GA teams directly from here (though likely app_controller handles saving)
-import re  # For sanitizing filenames
+from tkinter import ttk, messagebox  # Ensure messagebox is imported if _handle_select_benchmark_teams uses it.
+import os
+import re
 
 # Matplotlib imports
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
-# Assuming TeamSelectionDialog is now in gui.dialogs
+# Dialog import
 try:
     from .dialogs import TeamSelectionDialog
 except ImportError:  # Fallback for direct execution or different structure
     from dialogs import TeamSelectionDialog
 
-from optimizer_ga import GACandidate
-
-# Assuming Stats class is needed for type hinting or creating fallback Stats objects
-# This import might need adjustment based on your project structure relative to 'stats.py'
+# System path modification for project modules
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 try:
-    from stats import Stats
-    from entities import Team, Batter, Pitcher  # For type hints if needed
+    from stats import Stats, DEFAULT_FIP_CONSTANT  # Import a default FIP constant
+    from entities import Batter, Pitcher, Team
+    from optimizer_ga import GACandidate  # Import GACandidate for type hinting
 except ImportError:
-    print("Error importing Stats/Entities in ga_optimizer_tab.py. Ensure paths are correct.")
+    print(
+        "ERROR in ga_optimizer_tab.py: Could not import Stats, Entities, GACandidate, or DEFAULT_FIP_CONSTANT. Check paths.")
+    DEFAULT_FIP_CONSTANT = 3.15  # Fallback
 
 
-    # Define dummy classes if needed for the script to be parsable, but it won't run correctly
     class Stats:
-        pass
+        def calculate_batting_runs(self): return 0.0
+
+        def update_hits(self): pass
+
+        def calculate_avg(self): return ".000";
+
+        def calculate_obp(self): return ".000"
+
+        def calculate_slg(self): return ".000";
+
+        def calculate_ops(self): return ".000"
+
+        def get_innings_pitched(self): return 0.0;
+
+        def get_formatted_ip(self): return "0.0"
+
+        def calculate_era(self): return float('inf');
+
+        def calculate_whip(self): return float('inf')
+
+        def calculate_k_per_9(self): return 0.0
+
+        def calculate_fip(self, fip_constant=3.15, include_hbp=False): return float('inf')
+
+        def calculate_pitching_runs_saved_era_based(self, league_avg_era_per_9): return 0.0
+
+        def calculate_pitching_runs_saved_fip_based(self, league_avg_era_per_9, fip_constant=3.15,
+                                                    include_hbp_in_fip=False): return 0.0
+
+        def __init__(self):
+            attrs = ['plate_appearances', 'at_bats', 'runs_scored', 'hits', 'doubles', 'triples', 'home_runs', 'rbi',
+                     'walks', 'strikeouts', 'outs', 'singles', 'batters_faced', 'strikeouts_thrown', 'walks_allowed',
+                     'hits_allowed', 'runs_allowed', 'earned_runs_allowed', 'home_runs_allowed', 'outs_recorded',
+                     'hbp_allowed']
+            for attr in attrs: setattr(self, attr, 0)
 
 
     class Batter:
         pass
 
-
     class Pitcher:
         pass
+
+
+    class Team:
+        pass
+
+    class GACandidate:
+        pass
+
+# Placeholder for league average ERA for GA display context.
+# For GA, you might use a fixed target average or average of benchmarks.
+DEFAULT_LEAGUE_AVG_ERA_PLACEHOLDER_GA = 4.30
 
 
 class GAOptimizerTab(ttk.Frame):
     def __init__(self, parent_notebook, app_controller):
         super().__init__(parent_notebook)
-        self.app_controller = app_controller  # Reference to the main BaseballApp instance
+        self.app_controller = app_controller
 
         # GA Parameters (Tkinter variables specific to this tab)
         self.pop_size_var = tk.IntVar(value=20)
@@ -52,11 +95,10 @@ class GAOptimizerTab(ttk.Frame):
         self.mutation_rate_var = tk.DoubleVar(value=0.8)
         self.mutation_swaps_var = tk.IntVar(value=1)
         self.elitism_count_var = tk.IntVar(value=2)
-        # num_benchmark_teams_var is now primarily managed by app_controller,
-        # but this tab might want its own copy or to read from app_controller
-        self.num_benchmark_teams_display_var = tk.IntVar(
-            value=self.app_controller.ga_num_benchmark_teams_var.get())  # Reflect main app's var
-        self.app_controller.ga_num_benchmark_teams_var.trace_add("write", self._sync_num_benchmark_teams_display)
+
+        # num_benchmark_teams_var is in app_controller, GAOptimizerTab reads it
+        # self.num_benchmark_teams_display_var = tk.IntVar(value=self.app_controller.ga_num_benchmark_teams_var.get()) # To reflect controller's var
+        # self.app_controller.ga_num_benchmark_teams_var.trace_add("write", self._sync_num_benchmark_teams_display) # Sync if var changes
 
         self.games_vs_each_benchmark_var = tk.IntVar(value=100)
         self.immigration_rate_var = tk.DoubleVar(value=0.1)
@@ -74,22 +116,16 @@ class GAOptimizerTab(ttk.Frame):
         # Best GA Team Display
         self.best_team_info_var = tk.StringVar(value="Best: N/A | Fitness: N/A | Pts: N/A")
 
-        # Define column sets here as they are used for treeviews in this tab
-        # Using similar names as in app_controller for consistency if methods are moved directly
+        # Column definitions for the GA tab's best team display
         self.cols_roster_batting_ga = ("Name", "Pos", "PA", "AB", "R", "H", "2B", "3B", "HR", "RBI", "BB", "SO", "AVG",
                                        "OBP", "SLG", "OPS", "BatRuns")
-        self.cols_roster_pitching_ga = ("Name", "Role", "IP", "ERA", "WHIP", "BF", "K", "BB", "H", "R", "ER", "HR")
+        self.cols_roster_pitching_ga = ("Name", "Role", "IP", "ERA", "WHIP", "FIP", "K/9", "BB/9", "HR/9", "RSAA",
+                                        "FIP-RS", "BF", "K", "BB", "H", "R", "ER", "HR")  # ADDED new stats
 
         self._setup_widgets()
 
-    def _sync_num_benchmark_teams_display(self, *args):
-        """Syncs the display var with the main app controller's var if needed."""
-        if hasattr(self.app_controller, 'ga_num_benchmark_teams_var'):
-            try:
-                self.num_benchmark_teams_display_var.set(self.app_controller.ga_num_benchmark_teams_var.get())
-                self._update_selected_benchmarks_label_display()  # Also update dependent label
-            except tk.TclError:
-                pass  # In case var is being destroyed
+    def _sync_num_benchmark_teams_display(self, *args):  # Called when app_controller.ga_num_benchmark_teams_var changes
+        self._update_selected_benchmarks_label_display()
 
     def _setup_widgets(self):
         params_and_benchmark_select_outer_frame = ttk.Frame(self)
@@ -117,22 +153,20 @@ class GAOptimizerTab(ttk.Frame):
             "remaining slots will be filled by new random teams."),
                   wraplength=350, justify=tk.LEFT).grid(row=1, column=0, columnspan=2, padx=5, pady=(0, 5), sticky="w")
 
-        # Updated parameter labels with ranges
         param_labels_with_ranges = [
             ("Population Size:", "(1-500)"),
             ("Num Generations:", "(1-2000)"),
-            ("Mutation Rate:", "(0.0-1.0)"),  # Already had a range-like indicator
+            ("Mutation Rate:", "(0.0-1.0)"),
             ("Mutation Swaps:", "(1-10)"),
             ("Elitism Count:", "(0 to PopSize-1)"),
-            ("Num Benchmark Teams (Total):", "(0-20)"),
+            ("Num Benchmark Teams (Total):", "(0-20)"),  # This entry uses app_controller's var
             ("Games vs Each Benchmark:", "(1-1000)"),
-            ("Immigration Rate:", "(0.0-0.5)")  # Corrected range
+            ("Immigration Rate:", "(0.0-0.5)")
         ]
 
-        # Corresponding Tkinter variables (num_benchmark_teams_var is from app_controller)
         param_vars = [self.pop_size_var, self.num_generations_var, self.mutation_rate_var,
                       self.mutation_swaps_var, self.elitism_count_var,
-                      self.app_controller.ga_num_benchmark_teams_var,  # This one is special
+                      self.app_controller.ga_num_benchmark_teams_var,  # Read/write app_controller's var
                       self.games_vs_each_benchmark_var, self.immigration_rate_var]
 
         for i, ((label_text, range_text), var) in enumerate(zip(param_labels_with_ranges, param_vars)):
@@ -159,7 +193,7 @@ class GAOptimizerTab(ttk.Frame):
         self.status_label_var = tk.StringVar(value="Status: Idle")
         ttk.Label(progress_frame, textvariable=self.status_label_var).pack(fill="x", padx=5, pady=2)
 
-        # Plot and Best Team Details (as before)
+        # Best team display area (Plot on left, Details on right)
         best_team_frame_outer = ttk.Frame(self)
         best_team_frame_outer.pack(padx=10, pady=10, fill="both", expand=True)
 
@@ -178,9 +212,9 @@ class GAOptimizerTab(ttk.Frame):
             if hasattr(self.app_controller, 'log_message'):
                 self.app_controller.log_message(f"Matplotlib toolbar error: {e}", internal=True)
             else:
-                print(f"Matplotlib toolbar error: {e}")
+                print(f"Matplotlib toolbar error: {e}")  # Fallback
         self.plot_initialized = True
-        self.draw_fitness_plot()
+        self.draw_fitness_plot()  # Initial empty plot
 
         best_team_details_frame = ttk.LabelFrame(best_team_frame_outer, text="Best Team Found by GA")
         best_team_details_frame.pack(side=tk.RIGHT, fill="both", expand=True, padx=(5, 0))
@@ -202,6 +236,13 @@ class GAOptimizerTab(ttk.Frame):
                                                     command=lambda c=col: self.app_controller._treeview_sort_column(
                                                         self.best_team_batting_treeview, c, False))
             self.best_team_batting_treeview.column(col, width=width, anchor=anchor, stretch=tk.YES)
+        bt_scrollbar_y = ttk.Scrollbar(ga_batting_frame, orient="vertical",
+                                       command=self.best_team_batting_treeview.yview)
+        bt_scrollbar_x = ttk.Scrollbar(ga_batting_frame, orient="horizontal",
+                                       command=self.best_team_batting_treeview.xview)
+        self.best_team_batting_treeview.configure(yscrollcommand=bt_scrollbar_y.set, xscrollcommand=bt_scrollbar_x.set)
+        bt_scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
+        bt_scrollbar_x.pack(side=tk.BOTTOM, fill=tk.X)
         self.best_team_batting_treeview.pack(fill="both", expand=True, padx=5, pady=5)
 
         ga_pitching_frame = ttk.LabelFrame(best_team_stats_pane, text="Best Team - Pitching (Eval Stats)")
@@ -209,23 +250,35 @@ class GAOptimizerTab(ttk.Frame):
         self.best_team_pitching_treeview = ttk.Treeview(ga_pitching_frame, columns=self.cols_roster_pitching_ga,
                                                         show='headings', height=5)
         for col in self.cols_roster_pitching_ga:
-            width = 120 if col == "Name" else (50 if col == "IP" else 45)
+            w = 100 if col == "Name" else \
+                (40 if col == "Role" else \
+                     (35 if col == "IP" else \
+                          (45 if col in ["ERA", "WHIP", "FIP", "RSAA", "FIP-RS"] else \
+                               (40 if col in ["K/9", "BB/9", "HR/9", "BF", "K", "BB", "H", "R", "ER", "HR"] else 50))))
             anchor = tk.W if col == "Name" else tk.CENTER
             self.best_team_pitching_treeview.heading(col, text=col,
                                                      command=lambda c=col: self.app_controller._treeview_sort_column(
                                                          self.best_team_pitching_treeview, c, False))
             self.best_team_pitching_treeview.column(col, width=width, anchor=anchor, stretch=tk.YES)
+        pt_scrollbar_y = ttk.Scrollbar(ga_pitching_frame, orient="vertical",
+                                       command=self.best_team_pitching_treeview.yview)
+        pt_scrollbar_x = ttk.Scrollbar(ga_pitching_frame, orient="horizontal",
+                                       command=self.best_team_pitching_treeview.xview)
+        self.best_team_pitching_treeview.configure(yscrollcommand=pt_scrollbar_y.set, xscrollcommand=pt_scrollbar_x.set)
+        pt_scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
+        pt_scrollbar_x.pack(side=tk.BOTTOM, fill=tk.X)
         self.best_team_pitching_treeview.pack(fill="both", expand=True, padx=5, pady=5)
 
     def _update_selected_benchmarks_label_display(self, *args):
         try:
             num_selected = len(self.selected_benchmark_filepaths)
-            num_desired = self.app_controller.ga_num_benchmark_teams_var.get()  # Get from main app
+            num_desired = self.app_controller.ga_num_benchmark_teams_var.get()
             self.selected_benchmarks_label_var.set(f"Custom Benchmarks Selected: {num_selected} / {num_desired}")
         except tk.TclError:
             pass
         except Exception as e:
-            self.app_controller.log_message(f"Error updating benchmark label: {e}", internal=True)
+            if hasattr(self.app_controller, 'log_message'):
+                self.app_controller.log_message(f"Error updating benchmark label: {e}", internal=True)
 
     def _handle_select_benchmark_teams(self):
         if not self.app_controller.all_players_data:
@@ -239,22 +292,25 @@ class GAOptimizerTab(ttk.Frame):
             return
 
         if num_benchmarks_max <= 0:
-            messagebox.showinfo("Info", "Num Benchmark Teams is <= 0. All benchmarks will be random.",
+            messagebox.showinfo("Info",
+                                "Num Benchmark Teams is <= 0. All benchmarks will be random if 'Num Benchmark Teams' > 0.",
                                 parent=self.app_controller.root)
             self.selected_benchmark_filepaths = []
             self._update_selected_benchmarks_label_display()
             return
 
-        dialog = TeamSelectionDialog(self.app_controller.root,  # Parent is the main root window
+        dialog = TeamSelectionDialog(self.app_controller.root,
                                      teams_needed_or_allowed=num_benchmarks_max,
                                      dialog_title=f"Select up to {num_benchmarks_max} Custom Benchmarks")
 
         if dialog.selected_team_filepaths is not None:
             self.selected_benchmark_filepaths = dialog.selected_team_filepaths
-            self.app_controller.log_message(
-                f"Selected {len(self.selected_benchmark_filepaths)} custom benchmark teams.")
+            if hasattr(self.app_controller, 'log_message'):
+                self.app_controller.log_message(
+                    f"Selected {len(self.selected_benchmark_filepaths)} custom benchmark teams.")
         else:
-            self.app_controller.log_message("Benchmark selection cancelled.")
+            if hasattr(self.app_controller, 'log_message'):
+                self.app_controller.log_message("Benchmark selection cancelled.")
         self._update_selected_benchmarks_label_display()
 
     def _handle_start_ga_search(self):
@@ -264,7 +320,6 @@ class GAOptimizerTab(ttk.Frame):
         if self.app_controller.ga_optimizer_thread and self.app_controller.ga_optimizer_thread.is_alive():
             messagebox.showwarning("In Progress", "GA search already running.", parent=self.app_controller.root)
             return
-
         try:
             ga_params = {
                 "population_size": self.pop_size_var.get(),
@@ -274,13 +329,15 @@ class GAOptimizerTab(ttk.Frame):
                 "elitism_count": self.elitism_count_var.get(),
                 "num_benchmark_teams": self.app_controller.ga_num_benchmark_teams_var.get(),
                 "games_vs_each_benchmark": self.games_vs_each_benchmark_var.get(),
-                "immigration_rate": self.immigration_rate_var.get(),
+                "immigration_rate": self.immigration_rate_var.get()
             }
-            # Basic validation (can be expanded)
-            if not (0 < ga_params["population_size"] <= 500 and 0 < ga_params["num_generations"] <= 2000 and \
-                    0.0 <= ga_params["mutation_rate"] <= 1.0 and 0 < ga_params["num_mutation_swaps"] <= 10 and \
+            if not (0 < ga_params["population_size"] <= 500 and \
+                    0 < ga_params["num_generations"] <= 2000 and \
+                    0.0 <= ga_params["mutation_rate"] <= 1.0 and \
+                    0 < ga_params["num_mutation_swaps"] <= 10 and \
                     0 <= ga_params["elitism_count"] < ga_params["population_size"] and \
-                    0 <= ga_params["num_benchmark_teams"] <= 20 and 0 < ga_params["games_vs_each_benchmark"] <= 1000 and \
+                    0 <= ga_params["num_benchmark_teams"] <= 20 and \
+                    0 < ga_params["games_vs_each_benchmark"] <= 1000 and \
                     0.0 <= ga_params["immigration_rate"] <= 0.5):
                 messagebox.showerror("Invalid GA Parameters", "Check parameter ranges.",
                                      parent=self.app_controller.root)
@@ -289,28 +346,27 @@ class GAOptimizerTab(ttk.Frame):
             messagebox.showerror("Invalid Input", "GA parameters must be numbers.", parent=self.app_controller.root)
             return
 
-        # Call the main app controller to handle the GA process
-        self.app_controller.start_ga_optimizer_process(ga_params, self.selected_benchmark_filepaths)
+        # Pass a copy of the selected filepaths to the app controller
+        self.app_controller.start_ga_optimizer_process(ga_params, list(self.selected_benchmark_filepaths))
 
     def _handle_stop_ga_search(self):
-        self.app_controller.stop_ga_search()  # Delegate to app_controller
+        self.app_controller.stop_ga_search()
 
     def update_progress_display(self, percentage, message):
-        """Called by AppController to update this tab's progress elements."""
         self.progress_var.set(percentage)
         self.status_label_var.set(f"Status: {message}")
 
     def update_plot_data(self, generation_num, best_fitness, avg_fitness):
-        """Called by AppController to add data to the plot."""
         if not self.fitness_generations or generation_num > self.fitness_generations[-1]:
             self.fitness_generations.append(generation_num)
             self.fitness_best_values.append(best_fitness)
             self.fitness_avg_values.append(avg_fitness)
-        elif generation_num == self.fitness_generations[-1]:  # Update last point
+        elif generation_num == self.fitness_generations[-1]:
             self.fitness_best_values[-1] = best_fitness
             self.fitness_avg_values[-1] = avg_fitness
 
         if self.plot_initialized:
+            # Ensure plot drawing happens in main thread, app_controller handles root.after
             self.app_controller.root.after(0, self.draw_fitness_plot)
 
     def draw_fitness_plot(self):
@@ -339,7 +395,6 @@ class GAOptimizerTab(ttk.Frame):
         self.canvas.draw()
 
     def display_best_ga_team(self, best_candidate: GACandidate):
-        """Called by AppController to display the best team found."""
         if not best_candidate or not best_candidate.team:
             self.best_team_info_var.set("Best: N/A | Fitness: N/A | Pts: N/A")
             for tv in [self.best_team_batting_treeview, self.best_team_pitching_treeview]:
@@ -350,12 +405,10 @@ class GAOptimizerTab(ttk.Frame):
         self.best_team_info_var.set(
             f"Best: {team_obj.name} | Fitness: {best_candidate.fitness:.0f} | Pts: {team_obj.total_points}")
 
-        for tv in [self.best_team_batting_treeview, self.best_team_pitching_treeview]:
-            for i in tv.get_children(): tv.delete(i)
-
+        for i in self.best_team_batting_treeview.get_children(): self.best_team_batting_treeview.delete(i)
         for player in team_obj.batters + team_obj.bench:
             s = player.season_stats if hasattr(player, 'season_stats') and player.season_stats else Stats()
-            s.update_hits()
+            s.update_hits();
             bat_runs = s.calculate_batting_runs()
             self.best_team_batting_treeview.insert("", tk.END, values=(player.name, player.position,
                                                                        s.plate_appearances, s.at_bats, s.runs_scored,
@@ -364,36 +417,42 @@ class GAOptimizerTab(ttk.Frame):
                                                                        s.calculate_obp(), s.calculate_slg(),
                                                                        s.calculate_ops(), f"{bat_runs:.2f}"))
 
+        for i in self.best_team_pitching_treeview.get_children(): self.best_team_pitching_treeview.delete(i)
         for player in team_obj.all_pitchers:
             s = player.season_stats if hasattr(player, 'season_stats') and player.season_stats else Stats()
             era, whip = s.calculate_era(), s.calculate_whip()
-            self.best_team_pitching_treeview.insert("", tk.END,
-                                                    values=(player.name, player.team_role or player.position,
-                                                            s.get_formatted_ip(),
-                                                            f"{era:.2f}" if era != float('inf') else "INF",
-                                                            f"{whip:.2f}" if whip != float('inf') else "INF",
-                                                            s.batters_faced, s.strikeouts_thrown, s.walks_allowed,
-                                                            s.hits_allowed, s.runs_allowed,
-                                                            s.earned_runs_allowed, s.home_runs_allowed))
-        self.app_controller.log_message(f"Displayed stats for best GA team: {team_obj.name}", internal=True)
+            fip = s.calculate_fip(fip_constant=DEFAULT_FIP_CONSTANT, include_hbp=(hasattr(s, 'hbp_allowed')))
+            k_per_9 = s.calculate_k_per_9()
+            bb_per_9 = (s.walks_allowed * 9) / s.get_innings_pitched() if s.get_innings_pitched() > 0 else 0.0
+            hr_per_9 = (s.home_runs_allowed * 9) / s.get_innings_pitched() if s.get_innings_pitched() > 0 else 0.0
+            rsaa = s.calculate_pitching_runs_saved_era_based(DEFAULT_LEAGUE_AVG_ERA_PLACEHOLDER_GA)
+            fip_rs = s.calculate_pitching_runs_saved_fip_based(DEFAULT_LEAGUE_AVG_ERA_PLACEHOLDER_GA,
+                                                               fip_constant=DEFAULT_FIP_CONSTANT,
+                                                               include_hbp_in_fip=(hasattr(s, 'hbp_allowed')))
+
+            self.best_team_pitching_treeview.insert("", tk.END, values=(
+                player.name, player.team_role or player.position,
+                s.get_formatted_ip(),
+                f"{era:.2f}" if era != float('inf') else "INF",
+                f"{whip:.2f}" if whip != float('inf') else "INF",
+                f"{fip:.2f}" if fip != float('inf') else "INF",
+                f"{k_per_9:.2f}", f"{bb_per_9:.2f}", f"{hr_per_9:.2f}",
+                f"{rsaa:.2f}", f"{fip_rs:.2f}",
+                s.batters_faced, s.strikeouts_thrown, s.walks_allowed, s.hits_allowed,
+                s.runs_allowed, s.earned_runs_allowed, s.home_runs_allowed
+            ))
+        if hasattr(self.app_controller, 'log_message'):
+            self.app_controller.log_message(f"Displayed stats for best GA team: {team_obj.name}", internal=True)
 
     def reset_ui(self):
-        """Resets GA tab specific UI elements to their initial state."""
         self.best_team_info_var.set("Best: N/A | Fitness: N/A | Pts: N/A")
-        self.progress_var.set(0.0)
+        self.progress_var.set(0.0);
         self.status_label_var.set("Status: Idle")
-
-        self.selected_benchmark_filepaths.clear()
+        self.selected_benchmark_filepaths.clear();
         self._update_selected_benchmarks_label_display()
-
-        self.fitness_generations.clear()
-        self.fitness_best_values.clear()
+        self.fitness_generations.clear();
+        self.fitness_best_values.clear();
         self.fitness_avg_values.clear()
         if self.plot_initialized: self.draw_fitness_plot()
-
         for tv in [self.best_team_batting_treeview, self.best_team_pitching_treeview]:
             for i in tv.get_children(): tv.delete(i)
-
-        # Reset GA parameter entry fields to defaults (optional, or they retain last values)
-        # self.pop_size_var.set(20)
-        # ... etc. for other GA params if you want them to reset.
